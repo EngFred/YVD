@@ -6,6 +6,8 @@
 ![Hilt](https://img.shields.io/badge/Hilt-Dependency%20Injection-orange?style=for-the-badge)
 ![WorkManager](https://img.shields.io/badge/WorkManager-Background%20Sync-red?style=for-the-badge&logo=android&logoColor=white)
 
+[![Download APK](https://img.shields.io/github/v/release/EngFred/YVD?style=for-the-badge&label=Download%20APK&color=success&logo=android)](https://github.com/EngFred/YVD/releases/download/v1.0.0/yvd.apk)
+
 **YVD** is a robust, native Android application built with **Kotlin** and **Jetpack Compose** that allows users to download YouTube videos in various resolutions (360p to 1080p+).
 
 It leverages the power of `yt-dlp` (via JNI) to handle complex media extraction, **FFmpeg** for audio/video merging, and **Aria2c** for high-speed multi-threaded downloading. The app follows **Clean Architecture**, **MVVM**, and utilizes **WorkManager** to ensure downloads continue reliably in the background.
