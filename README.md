@@ -17,14 +17,12 @@ It leverages the power of `yt-dlp` (via JNI) to handle complex media extraction,
 ### App Interface
 | Home Screen | Quality Selection | In-App Progress |
 |:-----------:|:-----------------:|:-----------------:|
-| ![Home](path/to/screenshot_home.png) | ![Quality](path/to/screenshot_quality.png) | ![Progress](path/to/screenshot_progress.png) |
+| ![Home](https://github.com/user-attachments/assets/bc704ec6-0a91-45db-9675-939d630fcedd) | ![Quality](https://github.com/user-attachments/assets/69d49b42-1784-4118-9a86-cec2e2fd476d) | ![Progress]([path/to/screenshot_progress.png](https://github.com/user-attachments/assets/d64a57c5-9afd-4937-927e-3c804dc8e5f5)) |
 
 ### Background & Completion
 | Download Notification | Download Complete Screen |
 |:---------------------:|:------------------------:|
-| ![Notification](path/to/screenshot_notification.png) | ![Complete](path/to/screenshot_complete.png) |
-
-> *Note: Replace `path/to/screenshot.png` with actual screenshots of your app.*
+| ![Notification](https://github.com/user-attachments/assets/a18fca2c-9fb8-4443-b539-50f25b119929) | ![Complete]([path/to/screenshot_complete.png](https://github.com/user-attachments/assets/09455682-1c92-44b2-9429-8d4b6d4e12da)) |
 
 ---
 
