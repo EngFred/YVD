@@ -25,9 +25,9 @@ android {
 
         //Required for youtubedl-android native libraries
         ndk {
-            abiFilters.add("x86")
-            abiFilters.add("x86_64")
-            abiFilters.add("armeabi-v7a")
+//            abiFilters.add("x86")
+//            abiFilters.add("x86_64")
+//            abiFilters.add("armeabi-v7a")
             abiFilters.add("arm64-v8a")
         }
     }
