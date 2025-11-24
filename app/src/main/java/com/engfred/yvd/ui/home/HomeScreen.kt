@@ -77,8 +77,8 @@ fun HomeScreen(
             CenterAlignedTopAppBar(
                 title = { Text("YV Downloader") },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    titleContentColor = Color.White
                 )
             )
         },
@@ -141,6 +141,9 @@ fun HomeScreen(
                         viewModel.loadVideoInfo(urlText)
                     },
                     modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        contentColor = Color.White
+                    ),
                     enabled = !state.isLoading
                 ) {
                     if (state.isLoading) {
