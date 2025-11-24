@@ -1,55 +1,73 @@
 package com.engfred.yvd
 
 import android.app.Application
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.Context
+import android.os.Build
 import android.util.Log
+import androidx.hilt.work.HiltWorkerFactory
+import androidx.work.Configuration
 import com.yausername.aria2c.Aria2c
 import com.yausername.ffmpeg.FFmpeg
 import com.yausername.youtubedl_android.YoutubeDL
 import dagger.hilt.android.HiltAndroidApp
+import javax.inject.Inject
 
 @HiltAndroidApp
-class YVDApplication : Application() {
+class YVDApplication : Application(), Configuration.Provider {
 
     private val TAG = "YVD_APP"
 
+    @Inject
+    lateinit var workerFactory: HiltWorkerFactory
+
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder()
+            .setWorkerFactory(workerFactory)
+            .build()
+
     override fun onCreate() {
         super.onCreate()
-
-        Log.d(TAG, "")
-        Log.d(TAG, "========================================")
         Log.d(TAG, "🚀 YVD APPLICATION STARTING")
-        Log.d(TAG, "========================================")
 
+        initEngines()
+        createNotificationChannel()
+    }
+
+    private fun initEngines() {
         try {
-            Log.d(TAG, "🔧 Initializing YoutubeDL...")
             YoutubeDL.getInstance().init(this)
-            Log.d(TAG, "✅ YoutubeDL initialized")
-
-            Log.d(TAG, "🔧 Initializing FFmpeg...")
             FFmpeg.getInstance().init(this)
-            Log.d(TAG, "✅ FFmpeg initialized")
-
-            Log.d(TAG, "🔧 Initializing Aria2c...")
             Aria2c.getInstance().init(this)
-            Log.d(TAG, "✅ Aria2c initialized")
-
-            Log.d(TAG, "")
-            Log.d(TAG, "========================================")
-            Log.d(TAG, "✅ ALL ENGINES INITIALIZED SUCCESSFULLY")
-            Log.d(TAG, "========================================")
-            Log.d(TAG, "")
-
+            Log.d(TAG, "✅ ALL ENGINES INITIALIZED")
         } catch (e: Exception) {
-            Log.e(TAG, "")
-            Log.e(TAG, "========================================")
-            Log.e(TAG, "❌ CRITICAL FAILURE")
-            Log.e(TAG, "========================================")
-            Log.e(TAG, "Failed to initialize engines")
-            Log.e(TAG, "Exception: ${e.javaClass.simpleName}")
-            Log.e(TAG, "Message: ${e.message}")
-            Log.e(TAG, "Stack trace:", e)
-            Log.e(TAG, "========================================")
-            Log.e(TAG, "")
+            Log.e(TAG, "❌ Failed to initialize engines", e)
+        }
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val notificationManager: NotificationManager =
+                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+            // 1. Progress Channel (Low Importance = No Sound)
+            val name = "Download Progress"
+            val descriptionText = "Shows progress of video downloads"
+            val importance = NotificationManager.IMPORTANCE_LOW
+            val channel = NotificationChannel("download_channel", name, importance).apply {
+                description = descriptionText
+            }
+
+            // 2. Completion Channel (High Importance = Sound + Pop-up)
+            val completeName = "Download Completed"
+            val completeChannel = NotificationChannel("download_completed", completeName, NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Notifications when download finishes"
+                enableVibration(true)
+            }
+
+            notificationManager.createNotificationChannel(channel)
+            notificationManager.createNotificationChannel(completeChannel)
         }
     }
 }

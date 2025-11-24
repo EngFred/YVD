@@ -1,5 +1,10 @@
 package com.engfred.yvd.ui.home
 
+import android.Manifest
+import android.os.Build
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -38,18 +43,31 @@ fun HomeScreen(
     val clipboardManager = LocalClipboardManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val snackbarHostState = remember { SnackbarHostState() }
-
     var urlText by remember { mutableStateOf("") }
     var showFormatDialog by remember { mutableStateOf(false) }
 
-    // Show error in Snackbar
+    // Permission Launcher
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (!isGranted) {
+            Toast.makeText(context, "Notifications needed for background downloads", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    // Request permission on start
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
     LaunchedEffect(state.error) {
         state.error?.let { errorMessage ->
             snackbarHostState.showSnackbar(
                 message = errorMessage,
                 duration = SnackbarDuration.Long
             )
-            // Clear error after showing
             viewModel.clearError()
         }
     }
@@ -71,11 +89,7 @@ fun HomeScreen(
                     containerColor = MaterialTheme.colorScheme.errorContainer,
                     contentColor = MaterialTheme.colorScheme.onErrorContainer
                 ) {
-                    Text(
-                        text = data.visuals.message,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Text(text = data.visuals.message, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
@@ -153,7 +167,7 @@ fun HomeScreen(
                 )
             }
 
-            // Downloading Progress Section - Show IMMEDIATELY when isDownloading is true
+            // Downloading Progress Section
             if (state.isDownloading || state.downloadComplete) {
                 Spacer(modifier = Modifier.height(24.dp))
                 Card(
@@ -168,7 +182,6 @@ fun HomeScreen(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        // Show indeterminate progress if progress is 0 and still downloading
                         if (state.isDownloading && state.downloadProgress == 0f) {
                             LinearProgressIndicator(
                                 modifier = Modifier.fillMaxWidth(),
@@ -182,7 +195,6 @@ fun HomeScreen(
                             )
                         }
 
-                        // PLAY BUTTON
                         AnimatedVisibility(visible = state.downloadComplete) {
                             Button(
                                 onClick = { viewModel.openVideoFile(context) },
@@ -202,7 +214,6 @@ fun HomeScreen(
         }
     }
 
-    // Quality Selection Bottom Sheet
     if (showFormatDialog && state.videoMetadata != null) {
         ModalBottomSheet(onDismissRequest = { showFormatDialog = false }) {
             Text(
@@ -224,7 +235,10 @@ fun HomeScreen(
                         },
                         modifier = Modifier.clickable {
                             showFormatDialog = false
-                            // Trigger download immediately
+                            // Check permissions before starting download
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            }
                             viewModel.downloadVideo(urlText, format.formatId)
                         }
                     )
@@ -265,8 +279,6 @@ fun VideoCard(
                     maxLines = 2
                 )
                 Spacer(modifier = Modifier.height(12.dp))
-
-                // Button logic based on download state
                 Button(
                     onClick = onDownloadClick,
                     modifier = Modifier.fillMaxWidth(),

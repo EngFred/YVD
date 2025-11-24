@@ -88,8 +88,13 @@ dependencies {
     // icons
     implementation(libs.androidx.compose.material.icons)
 
-    //splash screen
+    // splash screen
     implementation(libs.androidx.core.splashscreen)
+
+    //// WorkManager + Hilt
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.hilt.work)
+    ksp(libs.androidx.hilt.compiler) // for HiltWorker factory generation
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
