@@ -21,6 +21,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
@@ -36,9 +37,22 @@ fun HomeScreen(
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    val snackbarHostState = remember { SnackbarHostState() }
 
     var urlText by remember { mutableStateOf("") }
     var showFormatDialog by remember { mutableStateOf(false) }
+
+    // Show error in Snackbar
+    LaunchedEffect(state.error) {
+        state.error?.let { errorMessage ->
+            snackbarHostState.showSnackbar(
+                message = errorMessage,
+                duration = SnackbarDuration.Long
+            )
+            // Clear error after showing
+            viewModel.clearError()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -49,6 +63,21 @@ fun HomeScreen(
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             )
+        },
+        snackbarHost = {
+            SnackbarHost(hostState = snackbarHostState) { data ->
+                Snackbar(
+                    modifier = Modifier.padding(16.dp),
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer
+                ) {
+                    Text(
+                        text = data.visuals.message,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
         }
     ) { padding ->
         Column(
@@ -88,7 +117,7 @@ fun HomeScreen(
 
             // Get Info Button
             AnimatedVisibility(
-                visible = state.videoMetadata == null,
+                visible = state.videoMetadata == null && !state.isDownloading && !state.downloadComplete,
                 enter = fadeIn(),
                 exit = fadeOut()
             ) {
@@ -112,31 +141,19 @@ fun HomeScreen(
                 }
             }
 
-            // Error Display
-            if (state.error != null) {
-                Spacer(modifier = Modifier.height(16.dp))
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
-                    Text(
-                        text = state.error!!,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.padding(16.dp)
-                    )
-                }
-            }
-
             // Video Metadata Card
             state.videoMetadata?.let { metadata ->
                 Spacer(modifier = Modifier.height(16.dp))
                 VideoCard(
                     metadata = metadata,
-                    isDownloading = state.isDownloading, // Pass the state down
+                    isDownloading = state.isDownloading,
                     onDownloadClick = {
                         showFormatDialog = true
                     }
                 )
             }
 
-            // Downloading Progress Section
+            // Downloading Progress Section - Show IMMEDIATELY when isDownloading is true
             if (state.isDownloading || state.downloadComplete) {
                 Spacer(modifier = Modifier.height(24.dp))
                 Card(
@@ -151,11 +168,19 @@ fun HomeScreen(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        LinearProgressIndicator(
-                            progress = { state.downloadProgress / 100f },
-                            modifier = Modifier.fillMaxWidth(),
-                            trackColor = MaterialTheme.colorScheme.surfaceDim,
-                        )
+                        // Show indeterminate progress if progress is 0 and still downloading
+                        if (state.isDownloading && state.downloadProgress == 0f) {
+                            LinearProgressIndicator(
+                                modifier = Modifier.fillMaxWidth(),
+                                trackColor = MaterialTheme.colorScheme.surfaceDim,
+                            )
+                        } else {
+                            LinearProgressIndicator(
+                                progress = { state.downloadProgress / 100f },
+                                modifier = Modifier.fillMaxWidth(),
+                                trackColor = MaterialTheme.colorScheme.surfaceDim,
+                            )
+                        }
 
                         // PLAY BUTTON
                         AnimatedVisibility(visible = state.downloadComplete) {
@@ -199,6 +224,7 @@ fun HomeScreen(
                         },
                         modifier = Modifier.clickable {
                             showFormatDialog = false
+                            // Trigger download immediately
                             viewModel.downloadVideo(urlText, format.formatId)
                         }
                     )
@@ -213,7 +239,7 @@ fun HomeScreen(
 @Composable
 fun VideoCard(
     metadata: VideoMetadata,
-    isDownloading: Boolean, // New Parameter
+    isDownloading: Boolean,
     onDownloadClick: () -> Unit
 ) {
     Card(
@@ -240,11 +266,11 @@ fun VideoCard(
                 )
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Button logic updated based on download state
+                // Button logic based on download state
                 Button(
                     onClick = onDownloadClick,
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = !isDownloading // Disable if downloading
+                    enabled = !isDownloading
                 ) {
                     if (isDownloading) {
                         CircularProgressIndicator(

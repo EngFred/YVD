@@ -10,21 +10,46 @@ import dagger.hilt.android.HiltAndroidApp
 @HiltAndroidApp
 class YVDApplication : Application() {
 
+    private val TAG = "YVD_APP"
+
     override fun onCreate() {
         super.onCreate()
+
+        Log.d(TAG, "")
+        Log.d(TAG, "========================================")
+        Log.d(TAG, "🚀 YVD APPLICATION STARTING")
+        Log.d(TAG, "========================================")
+
         try {
-            // 1. Initialize the Core Engine
+            Log.d(TAG, "🔧 Initializing YoutubeDL...")
             YoutubeDL.getInstance().init(this)
+            Log.d(TAG, "✅ YoutubeDL initialized")
 
-            // 2. Initialize FFmpeg (Required for merging Audio+Video in 1080p+)
+            Log.d(TAG, "🔧 Initializing FFmpeg...")
             FFmpeg.getInstance().init(this)
+            Log.d(TAG, "✅ FFmpeg initialized")
 
-            // 3. Initialize Aria2c (Required for high-speed connectivity)
+            Log.d(TAG, "🔧 Initializing Aria2c...")
             Aria2c.getInstance().init(this)
+            Log.d(TAG, "✅ Aria2c initialized")
 
-            Log.d("YVD_INIT", "Engines initialized successfully")
+            Log.d(TAG, "")
+            Log.d(TAG, "========================================")
+            Log.d(TAG, "✅ ALL ENGINES INITIALIZED SUCCESSFULLY")
+            Log.d(TAG, "========================================")
+            Log.d(TAG, "")
+
         } catch (e: Exception) {
-            Log.e("YVD_INIT", "Failed to initialize dependencies", e)
+            Log.e(TAG, "")
+            Log.e(TAG, "========================================")
+            Log.e(TAG, "❌ CRITICAL FAILURE")
+            Log.e(TAG, "========================================")
+            Log.e(TAG, "Failed to initialize engines")
+            Log.e(TAG, "Exception: ${e.javaClass.simpleName}")
+            Log.e(TAG, "Message: ${e.message}")
+            Log.e(TAG, "Stack trace:", e)
+            Log.e(TAG, "========================================")
+            Log.e(TAG, "")
         }
     }
 }
