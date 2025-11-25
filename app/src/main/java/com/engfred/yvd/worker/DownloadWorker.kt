@@ -78,7 +78,7 @@ class DownloadWorker @AssistedInject constructor(
             }
 
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Download Failed", e)
+            Log.e(TAG, "Download Failed", e)
 
             // 3. FAILURE: Use (Base ID + 1) so it survives
             // We use the same +1 slot as success because a job can't succeed AND fail

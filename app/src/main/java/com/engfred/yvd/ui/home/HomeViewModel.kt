@@ -56,7 +56,7 @@ class HomeViewModel @Inject constructor(
     }
 
     fun onUrlChanged() {
-        Log.d(TAG, "🔄 URL changed - resetting UI state")
+        Log.d(TAG, "URL changed - resetting UI state")
         _state.value = _state.value.copy(
             videoMetadata = null,
             error = null,
@@ -72,7 +72,7 @@ class HomeViewModel @Inject constructor(
 
     fun loadVideoInfo(url: String) {
         if (url.isBlank()) {
-            Log.w(TAG, "⚠️ loadVideoInfo called with blank URL")
+            Log.w(TAG, "loadVideoInfo called with blank URL")
             return
         }
 

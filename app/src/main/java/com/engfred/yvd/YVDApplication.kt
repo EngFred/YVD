@@ -29,7 +29,7 @@ class YVDApplication : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
-        Log.d(TAG, "🚀 YVD APPLICATION STARTING")
+        Log.d(TAG, "YVD APPLICATION STARTING")
 
         initEngines()
         createNotificationChannel()
@@ -40,9 +40,9 @@ class YVDApplication : Application(), Configuration.Provider {
             YoutubeDL.getInstance().init(this)
             FFmpeg.getInstance().init(this)
             Aria2c.getInstance().init(this)
-            Log.d(TAG, "✅ ALL ENGINES INITIALIZED")
+            Log.d(TAG, "ALL ENGINES INITIALIZED")
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Failed to initialize engines", e)
+            Log.e(TAG, "Failed to initialize engines", e)
         }
     }
 

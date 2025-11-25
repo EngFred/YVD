@@ -37,26 +37,26 @@ class YoutubeRepositoryImpl @Inject constructor(
             YoutubeDL.getInstance().init(context)
             FFmpeg.getInstance().init(context)
             // Aria2c removed to fix progress buffering issues
-            Log.d(TAG, "✅ Engines initialized successfully")
+            Log.d(TAG, "Engines initialized successfully")
         } catch (e: Exception) {
-            Log.e(TAG, "❌ CRITICAL: Failed to initialize engines", e)
+            Log.e(TAG, "CRITICAL: Failed to initialize engines", e)
         }
     }
 
     override fun getVideoMetadata(url: String): Flow<Resource<VideoMetadata>> = flow {
-        Log.d(TAG, "📥 Fetching metadata for URL: $url")
+        Log.d(TAG, "Fetching metadata for URL: $url")
         emit(Resource.Loading())
         try {
             initEngine()
             val request = YoutubeDLRequest(url)
             request.addOption("--dump-json")
 
-            Log.d(TAG, "🔍 Requesting video info...")
+            Log.d(TAG, "Requesting video info...")
             val info = YoutubeDL.getInstance().getInfo(request)
-            Log.d(TAG, "✅ Video info received: ${info.title}")
+            Log.d(TAG, "Video info received: ${info.title}")
 
             val rawFormats = info.formats ?: emptyList()
-            Log.d(TAG, "📊 Total formats available: ${rawFormats.size}")
+            Log.d(TAG, "Total formats available: ${rawFormats.size}")
 
             val validFormats = rawFormats
                 .filter { it.vcodec != "none" && it.height != 0 }
@@ -74,7 +74,7 @@ class YoutubeRepositoryImpl @Inject constructor(
                     )
                 }
 
-            Log.d(TAG, "✅ Valid formats parsed: ${validFormats.size}")
+            Log.d(TAG, "Valid formats parsed: ${validFormats.size}")
             validFormats.forEach {
                 Log.d(TAG, " ➤ ${it.resolution} (${it.formatId}) - ${it.fileSize}")
             }
@@ -87,9 +87,9 @@ class YoutubeRepositoryImpl @Inject constructor(
                 formats = validFormats
             )
             emit(Resource.Success(metadata))
-            Log.d(TAG, "✅ Metadata emitted successfully")
+            Log.d(TAG, "Metadata emitted successfully")
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Error fetching metadata", e)
+            Log.e(TAG, "Error fetching metadata", e)
             emit(Resource.Error("Error: ${e.message}"))
         }
     }.flowOn(Dispatchers.IO)
@@ -97,23 +97,23 @@ class YoutubeRepositoryImpl @Inject constructor(
     override fun downloadVideo(url: String, formatId: String, title: String): Flow<DownloadStatus> = callbackFlow {
         Log.d(TAG, "")
         Log.d(TAG, "========================================")
-        Log.d(TAG, "🎬 DOWNLOAD STARTED")
+        Log.d(TAG, "DOWNLOAD STARTED")
         Log.d(TAG, "========================================")
-        Log.d(TAG, "📹 Title: $title")
-        Log.d(TAG, "🎯 Format ID: $formatId")
-        Log.d(TAG, "🔗 URL: $url")
+        Log.d(TAG, "Title: $title")
+        Log.d(TAG, "Format ID: $formatId")
+        Log.d(TAG, "URL: $url")
         Log.d(TAG, "========================================")
 
         try {
             // IMMEDIATELY emit starting status
-            Log.d(TAG, "📤 Emitting initial progress (0%)")
+            Log.d(TAG, "Emitting initial progress (0%)")
             trySend(DownloadStatus.Progress(0f, "Preparing download..."))
 
             initEngine()
 
             val cleanTitle = title.replace("[^a-zA-Z0-9.-]".toRegex(), "_")
             val fileNameBase = "${cleanTitle}_${formatId}"
-            Log.d(TAG, "📝 Filename base: $fileNameBase")
+            Log.d(TAG, "Filename base: $fileNameBase")
 
             val downloadDir = File(
                 Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
@@ -121,10 +121,10 @@ class YoutubeRepositoryImpl @Inject constructor(
             )
 
             if (!downloadDir.exists()) {
-                Log.d(TAG, "📁 Creating download directory: ${downloadDir.absolutePath}")
+                Log.d(TAG, "Creating download directory: ${downloadDir.absolutePath}")
                 downloadDir.mkdirs()
             } else {
-                Log.d(TAG, "📁 Download directory exists: ${downloadDir.absolutePath}")
+                Log.d(TAG, "Download directory exists: ${downloadDir.absolutePath}")
             }
 
             val request = YoutubeDLRequest(url)
@@ -136,8 +136,8 @@ class YoutubeRepositoryImpl @Inject constructor(
             // new-line characters in logs so the app receives progress in real-time.
             request.addOption("--concurrent-fragments", "4")
 
-            Log.d(TAG, "🚀 Executing YoutubeDL download request...")
-            Log.d(TAG, "⏳ Waiting for progress callbacks...")
+            Log.d(TAG, "Executing YoutubeDL download request...")
+            Log.d(TAG, "Waiting for progress callbacks...")
 
             var lastProgress = 0f
             var progressCallbackCount = 0
@@ -177,17 +177,17 @@ class YoutubeRepositoryImpl @Inject constructor(
 
                 val sendResult = trySend(DownloadStatus.Progress(safeProgress, statusText))
                 if (sendResult.isFailure) {
-                    Log.w(TAG, "⚠️ Failed to send progress update: ${sendResult.exceptionOrNull()}")
+                    Log.w(TAG, "Failed to send progress update: ${sendResult.exceptionOrNull()}")
                 }
             }
 
-            Log.d(TAG, "✅ YoutubeDL execution completed")
-            Log.d(TAG, "📊 Total progress callbacks received: $progressCallbackCount")
-            Log.d(TAG, "🔍 Searching for downloaded file matching: $fileNameBase*")
+            Log.d(TAG, "YoutubeDL execution completed")
+            Log.d(TAG, "Total progress callbacks received: $progressCallbackCount")
+            Log.d(TAG, "Searching for downloaded file matching: $fileNameBase*")
 
             // Search for the downloaded file
             val filesInDir = downloadDir.listFiles()
-            Log.d(TAG, "📂 Files in download directory: ${filesInDir?.size ?: 0}")
+            Log.d(TAG, "Files in download directory: ${filesInDir?.size ?: 0}")
             filesInDir?.forEach { file ->
                 Log.d(TAG, " ➤ ${file.name} (${file.length() / 1024 / 1024} MB)")
             }
@@ -200,11 +200,11 @@ class YoutubeRepositoryImpl @Inject constructor(
                 val fileSizeMB = downloadedFile.length() / 1024 / 1024
                 Log.d(TAG, "")
                 Log.d(TAG, "========================================")
-                Log.d(TAG, "✅ DOWNLOAD SUCCESS")
+                Log.d(TAG, "DOWNLOAD SUCCESS")
                 Log.d(TAG, "========================================")
-                Log.d(TAG, "📄 File: ${downloadedFile.name}")
-                Log.d(TAG, "📦 Size: $fileSizeMB MB")
-                Log.d(TAG, "📍 Path: ${downloadedFile.absolutePath}")
+                Log.d(TAG, "File: ${downloadedFile.name}")
+                Log.d(TAG, "Size: $fileSizeMB MB")
+                Log.d(TAG, "Path: ${downloadedFile.absolutePath}")
                 Log.d(TAG, "========================================")
                 Log.d(TAG, "")
 
@@ -212,11 +212,11 @@ class YoutubeRepositoryImpl @Inject constructor(
             } else {
                 Log.e(TAG, "")
                 Log.e(TAG, "========================================")
-                Log.e(TAG, "❌ DOWNLOAD FAILED")
+                Log.e(TAG, "DOWNLOAD FAILED")
                 Log.e(TAG, "========================================")
-                Log.e(TAG, "🔍 Expected file pattern: $fileNameBase*")
-                Log.e(TAG, "📂 Search directory: ${downloadDir.absolutePath}")
-                Log.e(TAG, "❌ File not found")
+                Log.e(TAG, "Expected file pattern: $fileNameBase*")
+                Log.e(TAG, "Search directory: ${downloadDir.absolutePath}")
+                Log.e(TAG, "File not found")
                 Log.e(TAG, "========================================")
                 Log.e(TAG, "")
 
@@ -229,7 +229,7 @@ class YoutubeRepositoryImpl @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "")
             Log.e(TAG, "========================================")
-            Log.e(TAG, "❌ DOWNLOAD EXCEPTION")
+            Log.e(TAG, "DOWNLOAD EXCEPTION")
             Log.e(TAG, "========================================")
             Log.e(TAG, "Exception type: ${e.javaClass.simpleName}")
             Log.e(TAG, "Message: ${e.message}")
@@ -242,7 +242,7 @@ class YoutubeRepositoryImpl @Inject constructor(
         }
 
         awaitClose {
-            Log.d(TAG, "🧹 Download flow awaitClose called")
+            Log.d(TAG, "Download flow awaitClose called")
         }
     }.flowOn(Dispatchers.IO)
 }
