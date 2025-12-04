@@ -18,18 +18,10 @@ android {
         applicationId = "com.engfred.yvd"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-//        //Required for youtubedl-android native libraries
-//        ndk {
-////            abiFilters.add("x86")
-////            abiFilters.add("x86_64")
-////            abiFilters.add("armeabi-v7a")
-//            abiFilters.add("arm64-v8a")
-//        }
     }
 
     buildTypes {
@@ -94,7 +86,7 @@ dependencies {
     //// WorkManager + Hilt
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.hilt.work)
-    ksp(libs.androidx.hilt.compiler) // for HiltWorker factory generation
+    ksp(libs.androidx.hilt.compiler)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
