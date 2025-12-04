@@ -54,7 +54,7 @@ androidx-navigation-compose = { module = "androidx.navigation:navigation-compose
 # Image Loading (Coil)
 coil-compose = { module = "io.coil-kt:coil-compose", version.ref = "coil" }
 
-# NEW: Downloader Core (NewPipe + OkHttp)
+# Downloader Core (NewPipe + OkHttp)
 newpipe-extractor = { module = "com.github.TeamNewPipe:NewPipeExtractor", version.ref = "newpipeExtractor" }
 okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
 desugar-jdk-libs = { module = "com.android.tools:desugar_jdk_libs", version.ref = "desugar" }

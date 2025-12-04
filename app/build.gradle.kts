@@ -82,11 +82,6 @@ dependencies {
     implementation(libs.okhttp)
     coreLibraryDesugaring(libs.desugar.jdk.libs)
 
-    // REMOVE THESE LINES (no longer needed)
-    // implementation(libs.youtubedl.android)
-    // implementation(libs.youtubedl.ffmpeg)
-    // implementation(libs.youtubedl.aria2c)
-
     // Coroutines
     implementation(libs.kotlinx.coroutines.android)
 
