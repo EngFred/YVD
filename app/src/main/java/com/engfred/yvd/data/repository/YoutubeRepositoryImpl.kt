@@ -7,25 +7,19 @@ import com.engfred.yvd.common.Resource
 import com.engfred.yvd.domain.model.VideoFormat
 import com.engfred.yvd.domain.model.VideoMetadata
 import com.engfred.yvd.domain.repository.YoutubeRepository
-import com.yausername.ffmpeg.FFmpeg
-import com.yausername.youtubedl_android.YoutubeDL
-import com.yausername.youtubedl_android.YoutubeDLRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import org.schabi.newpipe.extractor.ServiceList
+import org.schabi.newpipe.extractor.services.youtube.extractors.YoutubeStreamExtractor
 import java.io.File
+import java.io.FileOutputStream
 import javax.inject.Inject
-
-sealed class DownloadStatus {
-    data class Progress(val progress: Float, val text: String) : DownloadStatus()
-    data class Success(val file: File) : DownloadStatus()
-    data class Error(val message: String) : DownloadStatus()
-}
 
 class YoutubeRepositoryImpl @Inject constructor(
     private val context: Context
@@ -33,234 +27,178 @@ class YoutubeRepositoryImpl @Inject constructor(
 
     private val TAG = "YVD_REPO"
 
-    // FIX: Static companion object to track initialization across the entire app lifecycle
-    companion object {
-        @Volatile
-        private var isInitialized = false
-        private val initMutex = Mutex()
-    }
-
-    private suspend fun ensureInitialized() {
-        if (!isInitialized) {
-            initMutex.withLock {
-                if (!isInitialized) {
-                    try {
-                        Log.d(TAG, "🔧 Initializing engines (One-time setup)...")
-                        YoutubeDL.getInstance().init(context)
-                        FFmpeg.getInstance().init(context)
-                        // Aria2c.getInstance().init(context) // Keep disabled as per your logic
-                        isInitialized = true
-                        Log.d(TAG, "Engines initialized successfully")
-                    } catch (e: Exception) {
-                        Log.e(TAG, "CRITICAL: Failed to initialize engines", e)
-                        throw e
-                    }
-                }
-            }
-        }
-    }
+    // Separate client for downloading large files (Keep simple, cookies not strictly needed for direct stream download usually, but good practice)
+    private val downloadClient = OkHttpClient()
 
     override fun getVideoMetadata(url: String): Flow<Resource<VideoMetadata>> = flow {
-        Log.d(TAG, "Fetching metadata for URL: $url")
+        Log.d(TAG, "--------------------------------------------------")
+        Log.d(TAG, "Step 1: Start fetching metadata for: $url")
         emit(Resource.Loading())
+
         try {
-            ensureInitialized()
+            // 1. Get the extractor
+            val extractor = ServiceList.YouTube.getStreamExtractor(url) as YoutubeStreamExtractor
 
-            val request = YoutubeDLRequest(url)
-            request.addOption("--dump-json")
+            // 2. Fetch data
+            Log.d(TAG, "Step 2: Executing Network Call (fetchPage)...")
+            extractor.fetchPage()
+            Log.d(TAG, "Step 3: Network Call Success. Video Name: ${extractor.name}")
 
-            Log.d(TAG, "Requesting video info...")
-            val info = YoutubeDL.getInstance().getInfo(request)
-            Log.d(TAG, "Video info received: ${info.title}")
+            // 3. Process Streams
+            Log.d(TAG, "Step 4: Processing video streams. Total found: ${extractor.videoStreams.size}")
 
-            val rawFormats = info.formats ?: emptyList()
-            Log.d(TAG, "Total formats available: ${rawFormats.size}")
+            val allFormats = extractor.videoStreams
+                // REMOVED: .filter { it.isVideoOnly == false } -> This was hiding 1080p+
+                .sortedWith(compareByDescending<org.schabi.newpipe.extractor.stream.VideoStream> {
+                    // Sort by resolution number (1080 > 720)
+                    it.resolution.replace("p", "").toIntOrNull() ?: 0
+                }.thenBy {
+                    // If resolutions are equal, prioritize ones WITH audio (isVideoOnly = false)
+                    it.isVideoOnly
+                })
 
-            val validFormats = rawFormats
-                .filter { it.vcodec != "none" && it.height != 0 }
-                .distinctBy { "${it.height}p" }
-                .sortedByDescending { it.height }
-                .map { format ->
-                    VideoFormat(
-                        formatId = format.formatId ?: "",
-                        ext = format.ext ?: "mp4",
-                        resolution = "${format.height}p",
-                        fileSize = format.fileSizeApproximate?.let {
-                            "%.1f MB".format(it / 1024.0 / 1024.0)
-                        } ?: "Unknown",
-                        fps = format.fps?.toInt() ?: 30
-                    )
+            val mappedFormats = allFormats.map { stream ->
+                // Calculate rough size if available (NewPipe often returns -1 for DASH)
+                val sizeMb = if (stream.format != null) {
+                    // Try to guess size or leave as unknown
+                    "Unknown"
+                } else "Unknown"
+
+                // Label video-only streams so user knows there is no audio
+                val resolutionLabel = if (stream.isVideoOnly) {
+                    "${stream.resolution} (Video Only)"
+                } else {
+                    stream.resolution
                 }
 
-            Log.d(TAG, "Valid formats parsed: ${validFormats.size}")
-            validFormats.forEach {
-                Log.d(TAG, " ➤ ${it.resolution} (${it.formatId}) - ${it.fileSize}")
+                VideoFormat(
+                    formatId = stream.itag.toString(),
+                    ext = stream.format?.suffix ?: "mp4",
+                    resolution = resolutionLabel,
+                    fileSize = sizeMb,
+                    fps = 30 // NewPipe usually doesn't give FPS easily in basic streams, defaulting to 30
+                )
             }
 
+            Log.d(TAG, "Step 5: Mapped ${mappedFormats.size} valid formats for UI.")
+
             val metadata = VideoMetadata(
-                id = info.id ?: "",
-                title = info.title ?: "Unknown Title",
-                thumbnailUrl = info.thumbnail ?: "",
-                duration = info.duration.toString(),
-                formats = validFormats
+                id = extractor.url,
+                title = extractor.name,
+                thumbnailUrl = extractor.thumbnails?.firstOrNull()?.url ?: "",
+                duration = extractor.length.toString(), // Returns seconds
+                formats = mappedFormats
             )
+
             emit(Resource.Success(metadata))
-            Log.d(TAG, "Metadata emitted successfully")
+            Log.d(TAG, "Step 6: Emit Success")
+
         } catch (e: Exception) {
-            Log.e(TAG, "Error fetching metadata", e)
+            Log.e(TAG, "CRITICAL ERROR in getVideoMetadata", e)
+            e.printStackTrace()
             emit(Resource.Error("Error: ${e.message}"))
         }
     }.flowOn(Dispatchers.IO)
 
     override fun downloadVideo(url: String, formatId: String, title: String): Flow<DownloadStatus> = callbackFlow {
-        Log.d(TAG, "")
-        Log.d(TAG, "========================================")
-        Log.d(TAG, "DOWNLOAD STARTED")
-        Log.d(TAG, "========================================")
-        Log.d(TAG, "Title: $title")
-        Log.d(TAG, "Format ID: $formatId")
-        Log.d(TAG, "URL: $url")
-        Log.d(TAG, "========================================")
+        Log.d(TAG, "Starting download process for: $title (itag: $formatId)")
 
         try {
-            // IMMEDIATELY emit starting status
-            Log.d(TAG, "Emitting initial progress (0%)")
-            trySend(DownloadStatus.Progress(0f, "Preparing download..."))
+            trySend(DownloadStatus.Progress(0f, "Initializing..."))
 
-            ensureInitialized()
+            // We must fetch page again to get fresh download URL (URLs expire)
+            val extractor = ServiceList.YouTube.getStreamExtractor(url) as YoutubeStreamExtractor
+            extractor.fetchPage()
+
+            val targetStream = extractor.videoStreams.find { it.itag.toString() == formatId }
+
+            if (targetStream == null) {
+                Log.e(TAG, "Stream ID $formatId not found in fresh fetch.")
+                trySend(DownloadStatus.Error("Format link expired or not found"))
+                close()
+                return@callbackFlow
+            }
+
+            Log.d(TAG, "Found target stream URL: ${targetStream.content}")
 
             val cleanTitle = title.replace("[^a-zA-Z0-9.-]".toRegex(), "_")
-            val fileNameBase = "${cleanTitle}_${formatId}"
-            Log.d(TAG, "Filename base: $fileNameBase")
+            val ext = targetStream.format?.suffix ?: "mp4"
+            val fileName = "${cleanTitle}_${targetStream.resolution}.$ext"
 
             val downloadDir = File(
                 Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
                 "YVD_Downloads"
             )
+            if (!downloadDir.exists()) downloadDir.mkdirs()
 
-            if (!downloadDir.exists()) {
-                Log.d(TAG, "Creating download directory: ${downloadDir.absolutePath}")
-                downloadDir.mkdirs()
-            } else {
-                Log.d(TAG, "Download directory exists: ${downloadDir.absolutePath}")
+            val file = File(downloadDir, fileName)
+            Log.d(TAG, "Saving to: ${file.absolutePath}")
+
+            val request = Request.Builder().url(targetStream.content).build()
+            val response = downloadClient.newCall(request).execute()
+
+            if (!response.isSuccessful) {
+                Log.e(TAG, "Download request failed: ${response.code}")
+                trySend(DownloadStatus.Error("Network error: ${response.code}"))
+                close()
+                return@callbackFlow
             }
 
-            val request = YoutubeDLRequest(url)
-            request.addOption("-f", "$formatId+bestaudio/best")
-            request.addOption("-o", "${downloadDir.absolutePath}/$fileNameBase.%(ext)s")
+            val body = response.body
+            if (body == null) {
+                trySend(DownloadStatus.Error("Server returned empty file"))
+                close()
+                return@callbackFlow
+            }
 
-            // Use concurrent-fragments instead of aria2c
-            // This ensures multi-threaded speed (4 connections) while maintaining proper
-            // new-line characters in logs so the app receives progress in real-time.
-            request.addOption("--concurrent-fragments", "4")
+            val totalLength = body.contentLength()
+            Log.d(TAG, "File size to download: $totalLength bytes")
 
-            Log.d(TAG, "Executing YoutubeDL download request...")
-            Log.d(TAG, "Waiting for progress callbacks...")
+            var bytesCopied: Long = 0
+            val buffer = ByteArray(8 * 1024)
+            val inputStream = body.byteStream()
+            val outputStream = FileOutputStream(file)
 
-            var lastProgress = 0f
-            var progressCallbackCount = 0
+            var lastProgress = 0
 
-            YoutubeDL.getInstance().execute(request, null) { progress, etaInSeconds, line ->
-                progressCallbackCount++
+            inputStream.use { input ->
+                outputStream.use { output ->
+                    var bytes = input.read(buffer)
+                    while (bytes >= 0) {
+                        output.write(buffer, 0, bytes)
+                        bytesCopied += bytes
 
-                val safeProgress = when {
-                    progress < 0 -> 0f
-                    progress > 100 -> 100f
-                    else -> progress
-                }
-
-                // Log every progress update
-                if (safeProgress != lastProgress || progressCallbackCount % 10 == 1) {
-                    Log.d(TAG, "📊 Progress callback #$progressCallbackCount: $safeProgress% | ETA: ${etaInSeconds}s | Line: $line")
-                    lastProgress = safeProgress
-                }
-
-                val statusText = when {
-                    line?.contains("Merging", ignoreCase = true) == true -> {
-                        Log.d(TAG, "🔄 Status: Merging detected")
-                        "Finalizing & Merging..."
-                    }
-                    line?.contains("ffmpeg", ignoreCase = true) == true -> {
-                        Log.d(TAG, "🎞️ Status: FFmpeg processing")
-                        "Processing video..."
-                    }
-                    safeProgress > 98f -> {
-                        Log.d(TAG, "✨ Status: Near completion")
-                        "Finalizing..."
-                    }
-                    else -> {
-                        "Downloading ${safeProgress.toInt()}%"
+                        if (totalLength > 0) {
+                            val progress = ((bytesCopied.toFloat() / totalLength.toFloat()) * 100).toInt()
+                            // Only emit if progress changed to avoid flooding UI
+                            if (progress > lastProgress) {
+                                lastProgress = progress
+                                trySend(DownloadStatus.Progress(progress.toFloat(), "Downloading $progress%"))
+                            }
+                        }
+                        bytes = input.read(buffer)
                     }
                 }
-
-                val sendResult = trySend(DownloadStatus.Progress(safeProgress, statusText))
-                if (sendResult.isFailure) {
-                    Log.w(TAG, "Failed to send progress update: ${sendResult.exceptionOrNull()}")
-                }
             }
 
-            Log.d(TAG, "YoutubeDL execution completed")
-            Log.d(TAG, "Total progress callbacks received: $progressCallbackCount")
-            Log.d(TAG, "Searching for downloaded file matching: $fileNameBase*")
-
-            // Search for the downloaded file
-            val filesInDir = downloadDir.listFiles()
-            Log.d(TAG, "Files in download directory: ${filesInDir?.size ?: 0}")
-            filesInDir?.forEach { file ->
-                Log.d(TAG, " ➤ ${file.name} (${file.length() / 1024 / 1024} MB)")
-            }
-
-            val downloadedFile = filesInDir?.find {
-                it.name.startsWith(fileNameBase)
-            }
-
-            if (downloadedFile != null && downloadedFile.exists()) {
-                val fileSizeMB = downloadedFile.length() / 1024 / 1024
-                Log.d(TAG, "")
-                Log.d(TAG, "========================================")
-                Log.d(TAG, "DOWNLOAD SUCCESS")
-                Log.d(TAG, "========================================")
-                Log.d(TAG, "File: ${downloadedFile.name}")
-                Log.d(TAG, "Size: $fileSizeMB MB")
-                Log.d(TAG, "Path: ${downloadedFile.absolutePath}")
-                Log.d(TAG, "========================================")
-                Log.d(TAG, "")
-
-                trySend(DownloadStatus.Success(downloadedFile))
-            } else {
-                Log.e(TAG, "")
-                Log.e(TAG, "========================================")
-                Log.e(TAG, "DOWNLOAD FAILED")
-                Log.e(TAG, "========================================")
-                Log.e(TAG, "Expected file pattern: $fileNameBase*")
-                Log.e(TAG, "Search directory: ${downloadDir.absolutePath}")
-                Log.e(TAG, "File not found")
-                Log.e(TAG, "========================================")
-                Log.e(TAG, "")
-
-                trySend(DownloadStatus.Error("Download finished but file not found."))
-            }
-
+            Log.d(TAG, "Download finished successfully.")
+            trySend(DownloadStatus.Success(file))
             close()
-            Log.d(TAG, "🔒 Download flow closed")
 
         } catch (e: Exception) {
-            Log.e(TAG, "")
-            Log.e(TAG, "========================================")
-            Log.e(TAG, "DOWNLOAD EXCEPTION")
-            Log.e(TAG, "========================================")
-            Log.e(TAG, "Exception type: ${e.javaClass.simpleName}")
-            Log.e(TAG, "Message: ${e.message}")
-            Log.e(TAG, "Stack trace:", e)
-            Log.e(TAG, "========================================")
-            Log.e(TAG, "")
-
-            trySend(DownloadStatus.Error("Failed: ${e.message}"))
+            Log.e(TAG, "Exception during download", e)
+            trySend(DownloadStatus.Error("Download Failed: ${e.message}"))
             close()
         }
 
         awaitClose {
-            Log.d(TAG, "Download flow awaitClose called")
+            Log.d(TAG, "Download flow closed.")
         }
     }.flowOn(Dispatchers.IO)
+}
+
+sealed class DownloadStatus {
+    data class Progress(val progress: Float, val text: String) : DownloadStatus()
+    data class Success(val file: File) : DownloadStatus()
+    data class Error(val message: String) : DownloadStatus()
 }

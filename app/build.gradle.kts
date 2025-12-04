@@ -23,13 +23,13 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        //Required for youtubedl-android native libraries
-        ndk {
-//            abiFilters.add("x86")
-//            abiFilters.add("x86_64")
-//            abiFilters.add("armeabi-v7a")
-            abiFilters.add("arm64-v8a")
-        }
+//        //Required for youtubedl-android native libraries
+//        ndk {
+////            abiFilters.add("x86")
+////            abiFilters.add("x86_64")
+////            abiFilters.add("armeabi-v7a")
+//            abiFilters.add("arm64-v8a")
+//        }
     }
 
     buildTypes {
@@ -77,10 +77,15 @@ dependencies {
     // Coil (Images)
     implementation(libs.coil.compose)
 
-    // Downloader & FFMPEG
-    implementation(libs.youtubedl.android)
-    implementation(libs.youtubedl.ffmpeg)
-//    implementation(libs.youtubedl.aria2c)
+    // NewPipe & Networking
+    implementation(libs.newpipe.extractor)
+    implementation(libs.okhttp)
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
+
+    // REMOVE THESE LINES (no longer needed)
+    // implementation(libs.youtubedl.android)
+    // implementation(libs.youtubedl.ffmpeg)
+    // implementation(libs.youtubedl.aria2c)
 
     // Coroutines
     implementation(libs.kotlinx.coroutines.android)
