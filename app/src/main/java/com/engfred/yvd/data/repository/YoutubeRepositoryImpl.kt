@@ -60,7 +60,13 @@ class YoutubeRepositoryImpl @Inject constructor(
             val allVideoStreams = extractor.videoStreams + extractor.videoOnlyStreams
             Log.d(TAG, "Step 4: Processing video streams. Total found: ${allVideoStreams.size}")
 
-            val sortedFormats = allVideoStreams.sortedWith(
+            // FILTER: Keep only MP4 streams as requested
+            val mp4Streams = allVideoStreams.filter {
+                it.format?.suffix == "mp4"
+                // Note: WebM streams are now excluded here
+            }
+
+            val sortedFormats = mp4Streams.sortedWith(
                 compareByDescending<VideoStream> {
                     // Extract resolution number (e.g., 1080 from "1080p" or "1080p60")
                     it.resolution.replace(Regex("p.*"), "").toIntOrNull() ?: 0
@@ -73,15 +79,25 @@ class YoutubeRepositoryImpl @Inject constructor(
                 }
             )
 
-            val mappedFormats = sortedFormats.map { stream ->
-                val sizeMb = "Unknown" // Calculation logic placeholder
+            val durationSeconds = extractor.length
 
-                // Label video-only streams so user knows there is no audio
-                val resolutionLabel = if (stream.isVideoOnly) {
-                    "${stream.resolution} (Video Only)"
+            val mappedFormats = sortedFormats.map { stream ->
+                // Calculate File Size for UI display
+                val bitrate = stream.bitrate
+                val bytes = if (bitrate > 0 && durationSeconds > 0) {
+                    (bitrate.toLong() * durationSeconds) / 8
                 } else {
-                    stream.resolution
+                    -1L
                 }
+                val sizeMb = if (bytes > 0) {
+                    val mb = bytes.toDouble() / (1024 * 1024)
+                    "%.1f MB".format(mb)
+                } else {
+                    "Unknown"
+                }
+
+                // Just show resolution (No"Video Only" text)
+                val resolutionLabel = stream.resolution
 
                 // Parse FPS from resolution string
                 val fps = stream.resolution.substringAfter("p", "30").replace(Regex("\\D+"), "").toIntOrNull() ?: 30
@@ -100,7 +116,7 @@ class YoutubeRepositoryImpl @Inject constructor(
             val metadata = VideoMetadata(
                 id = extractor.url,
                 title = extractor.name,
-                thumbnailUrl = extractor.thumbnails?.firstOrNull()?.url ?: "",
+                thumbnailUrl = extractor.thumbnails.firstOrNull()?.url ?: "",
                 duration = extractor.length.toString(),
                 formats = mappedFormats
             )
@@ -162,8 +178,8 @@ class YoutubeRepositoryImpl @Inject constructor(
                 downloadStream(targetStream, videoTemp, this@callbackFlow, "Downloading video...")
 
                 // 2. Select Compatible Audio
-                // FIX: Strictly match audio container to video container to prevent MediaMuxer crash.
-                // If video is mp4, we MUST find m4a. If video is webm, we MUST find webm.
+                // Strictly match audio container to video container.
+                // If video is mp4, we MUST find m4a.
                 val targetAudioSuffix = if (videoExt == "mp4") "m4a" else "webm"
 
                 Log.d(TAG, "Looking for audio with suffix: $targetAudioSuffix to match video container.")
@@ -173,7 +189,7 @@ class YoutubeRepositoryImpl @Inject constructor(
                 }
 
                 // Sort by bitrate to get best quality audio
-                val bestAudio = validAudioStreams.sortedByDescending { it.averageBitrate }.firstOrNull()
+                val bestAudio = validAudioStreams.maxByOrNull { it.averageBitrate }
 
                 if (bestAudio == null) {
                     trySend(DownloadStatus.Error("No compatible audio ($targetAudioSuffix) found."))
@@ -242,10 +258,7 @@ class YoutubeRepositoryImpl @Inject constructor(
                 return
             }
 
-            val body = response.body ?: run {
-                flow.trySend(DownloadStatus.Error("Server returned empty file"))
-                return
-            }
+            val body = response.body
 
             val totalLength = body.contentLength()
             Log.d(TAG, "File size to download: $totalLength bytes for ${file.name}")
@@ -282,12 +295,11 @@ class YoutubeRepositoryImpl @Inject constructor(
         }
     }
 
-    // Mux function using MediaMuxer and MediaExtractor
     private fun muxAudioVideo(
         audioFilePath: String,
         videoFilePath: String,
         outputFilePath: String,
-        outputFormat: Int // Added parameter for correct container format
+        outputFormat: Int
     ) {
         // Init extractors
         val videoExtractor = MediaExtractor()
@@ -388,6 +400,7 @@ class YoutubeRepositoryImpl @Inject constructor(
         throw IllegalArgumentException("No track found with MIME prefix: $mimePrefix")
     }
 }
+
 sealed class DownloadStatus {
     data class Progress(val progress: Float, val text: String) : DownloadStatus()
     data class Success(val file: File) : DownloadStatus()
