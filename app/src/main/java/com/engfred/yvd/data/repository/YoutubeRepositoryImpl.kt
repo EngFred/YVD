@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.File
 import javax.inject.Inject
 
@@ -31,15 +33,30 @@ class YoutubeRepositoryImpl @Inject constructor(
 
     private val TAG = "YVD_REPO"
 
-    private fun initEngine() {
-        try {
-            Log.d(TAG, "🔧 Initializing engines...")
-            YoutubeDL.getInstance().init(context)
-            FFmpeg.getInstance().init(context)
-            // Aria2c removed to fix progress buffering issues
-            Log.d(TAG, "Engines initialized successfully")
-        } catch (e: Exception) {
-            Log.e(TAG, "CRITICAL: Failed to initialize engines", e)
+    // FIX: Static companion object to track initialization across the entire app lifecycle
+    companion object {
+        @Volatile
+        private var isInitialized = false
+        private val initMutex = Mutex()
+    }
+
+    private suspend fun ensureInitialized() {
+        if (!isInitialized) {
+            initMutex.withLock {
+                if (!isInitialized) {
+                    try {
+                        Log.d(TAG, "🔧 Initializing engines (One-time setup)...")
+                        YoutubeDL.getInstance().init(context)
+                        FFmpeg.getInstance().init(context)
+                        // Aria2c.getInstance().init(context) // Keep disabled as per your logic
+                        isInitialized = true
+                        Log.d(TAG, "Engines initialized successfully")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "CRITICAL: Failed to initialize engines", e)
+                        throw e
+                    }
+                }
+            }
         }
     }
 
@@ -47,7 +64,8 @@ class YoutubeRepositoryImpl @Inject constructor(
         Log.d(TAG, "Fetching metadata for URL: $url")
         emit(Resource.Loading())
         try {
-            initEngine()
+            ensureInitialized()
+
             val request = YoutubeDLRequest(url)
             request.addOption("--dump-json")
 
@@ -109,7 +127,7 @@ class YoutubeRepositoryImpl @Inject constructor(
             Log.d(TAG, "Emitting initial progress (0%)")
             trySend(DownloadStatus.Progress(0f, "Preparing download..."))
 
-            initEngine()
+            ensureInitialized()
 
             val cleanTitle = title.replace("[^a-zA-Z0-9.-]".toRegex(), "_")
             val fileNameBase = "${cleanTitle}_${formatId}"
@@ -131,7 +149,7 @@ class YoutubeRepositoryImpl @Inject constructor(
             request.addOption("-f", "$formatId+bestaudio/best")
             request.addOption("-o", "${downloadDir.absolutePath}/$fileNameBase.%(ext)s")
 
-            // FIX: Use concurrent-fragments instead of aria2c
+            // Use concurrent-fragments instead of aria2c
             // This ensures multi-threaded speed (4 connections) while maintaining proper
             // new-line characters in logs so the app receives progress in real-time.
             request.addOption("--concurrent-fragments", "4")

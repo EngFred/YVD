@@ -80,7 +80,7 @@ dependencies {
     // Downloader & FFMPEG
     implementation(libs.youtubedl.android)
     implementation(libs.youtubedl.ffmpeg)
-    implementation(libs.youtubedl.aria2c)
+//    implementation(libs.youtubedl.aria2c)
 
     // Coroutines
     implementation(libs.kotlinx.coroutines.android)

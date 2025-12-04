@@ -51,12 +51,8 @@ class HomeViewModel @Inject constructor(
     private val workManager = WorkManager.getInstance(context)
     private var currentWorkId: UUID? = null
 
-    init {
-        // Observe existing work if needed
-    }
-
     fun onUrlChanged() {
-        Log.d(TAG, "URL changed - resetting UI state")
+        // Only reset if actually changed to avoid UI flickering
         _state.value = _state.value.copy(
             videoMetadata = null,
             error = null,
@@ -66,17 +62,12 @@ class HomeViewModel @Inject constructor(
     }
 
     fun clearError() {
-        Log.d(TAG, "🧹 Clearing error state")
         _state.value = _state.value.copy(error = null)
     }
 
     fun loadVideoInfo(url: String) {
-        if (url.isBlank()) {
-            Log.w(TAG, "loadVideoInfo called with blank URL")
-            return
-        }
+        if (url.isBlank()) return
 
-        // Reset download state
         _state.value = _state.value.copy(
             downloadComplete = false,
             downloadedFile = null,
@@ -109,7 +100,7 @@ class HomeViewModel @Inject constructor(
         _state.value = _state.value.copy(
             isDownloading = true,
             downloadProgress = 0f,
-            downloadStatusText = "Queuing download...",
+            downloadStatusText = "Starting download service...",
             downloadComplete = false,
             error = null
         )

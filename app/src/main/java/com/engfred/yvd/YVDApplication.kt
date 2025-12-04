@@ -8,10 +8,12 @@ import android.os.Build
 import android.util.Log
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
-import com.yausername.aria2c.Aria2c
 import com.yausername.ffmpeg.FFmpeg
 import com.yausername.youtubedl_android.YoutubeDL
 import dagger.hilt.android.HiltAndroidApp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltAndroidApp
@@ -31,16 +33,20 @@ class YVDApplication : Application(), Configuration.Provider {
         super.onCreate()
         Log.d(TAG, "YVD APPLICATION STARTING")
 
-        initEngines()
+        CoroutineScope(Dispatchers.IO).launch {
+            initEngines()
+        }
+
         createNotificationChannel()
     }
 
     private fun initEngines() {
         try {
+            // We initialize here to "warm up" the app, but the Repository will
+            // also check this flag to ensure it's ready before downloading.
             YoutubeDL.getInstance().init(this)
             FFmpeg.getInstance().init(this)
-            Aria2c.getInstance().init(this)
-            Log.d(TAG, "ALL ENGINES INITIALIZED")
+            Log.d(TAG, "ALL ENGINES INITIALIZED (Background)")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize engines", e)
         }
