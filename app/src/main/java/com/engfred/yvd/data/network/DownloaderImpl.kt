@@ -3,7 +3,6 @@ package com.engfred.yvd.data.network
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -11,19 +10,27 @@ import org.schabi.newpipe.extractor.downloader.Downloader
 import org.schabi.newpipe.extractor.downloader.Request as NewPipeRequest
 import org.schabi.newpipe.extractor.downloader.Response as NewPipeResponse
 import java.util.concurrent.TimeUnit
+import okhttp3.ConnectionPool
 
 /**
  * Bridges NewPipe's internal networking requirements to our OkHttp client.
  * Includes a CookieJar to handle YouTube's redirection loops (GDPR/Consent).
+ * Optimized for high-throughput downloads.
  */
 class DownloaderImpl : Downloader() {
 
     // Simple in-memory cookie store to handle redirects
     private val cookieStore = HashMap<String, List<Cookie>>()
 
+    // Connection pool to reuse connections and reduce latency
+    private val connectionPool = ConnectionPool(5, 5, TimeUnit.MINUTES)
+
     private val client: OkHttpClient = OkHttpClient.Builder()
-        .readTimeout(30, TimeUnit.SECONDS)
-        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS) // Increased timeout for large files
+        .connectTimeout(60, TimeUnit.SECONDS)
+        .writeTimeout(60, TimeUnit.SECONDS)
+        .connectionPool(connectionPool)
+        .retryOnConnectionFailure(true)
         .cookieJar(object : CookieJar {
             override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
                 cookieStore[url.host] = cookies
@@ -37,6 +44,14 @@ class DownloaderImpl : Downloader() {
         .followRedirects(true)
         .followSslRedirects(true)
         .build()
+
+    /**
+     * Expose the raw OkHttpClient for our Repository to use
+     * so we share the same cookie jar and connection pool.
+     */
+    fun getOkHttpClient(): OkHttpClient {
+        return client
+    }
 
     override fun execute(request: NewPipeRequest): NewPipeResponse {
         val httpMethod = request.httpMethod()
