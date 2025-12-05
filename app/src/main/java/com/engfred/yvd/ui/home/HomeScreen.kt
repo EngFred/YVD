@@ -5,12 +5,7 @@ import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -102,8 +97,6 @@ fun HomeScreen(
     }
 
     Scaffold(
-        // Prevent inner scaffold from doubling up system window insets, relying on padding instead
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
                 title = { Text("YV Downloader") },
@@ -125,8 +118,6 @@ fun HomeScreen(
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
-                // Added padding to clear the Bottom Navigation Bar in MainScreen
-                modifier = Modifier.padding(bottom = 135.dp),
                 onClick = { openYoutube(context) },
                 containerColor = Color(0xFFFF0000),
                 contentColor = Color.White
@@ -144,8 +135,6 @@ fun HomeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .consumeWindowInsets(padding)
-                .systemBarsPadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -212,7 +201,6 @@ fun HomeScreen(
                         .fillMaxWidth()
                         .height(400.dp)
                         .padding(start = 24.dp, end = 24.dp)
-                        .navigationBarsPadding()
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.ContentPaste,
@@ -234,7 +222,6 @@ fun HomeScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-
             }
 
             // Video Metadata Card
@@ -262,8 +249,8 @@ fun HomeScreen(
                 )
             }
 
+            // Spacer to clear the FAB so content doesn't get hidden behind it
             Spacer(modifier = Modifier.height(80.dp))
-            Spacer(modifier = Modifier.windowInsetsBottomHeight(WindowInsets.safeDrawing))
         }
     }
 

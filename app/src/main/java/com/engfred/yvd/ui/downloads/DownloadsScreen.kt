@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -129,7 +128,6 @@ fun DownloadsScreen(
 
     Scaffold(
         topBar = {
-            // Contextual Top Bar
             TopAppBar(
                 title = {
                     if (isSelectionMode) {
@@ -157,7 +155,6 @@ fun DownloadsScreen(
                             Icon(Icons.Rounded.Delete, contentDescription = "Delete Selected")
                         }
                     } else {
-                        // Only show Delete All if there are actually files
                         if (uiState.files.isNotEmpty()) {
                             IconButton(onClick = { deleteMode = DeleteMode.ALL }) {
                                 Icon(Icons.Rounded.DeleteForever, contentDescription = "Delete All")
@@ -177,7 +174,6 @@ fun DownloadsScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .navigationBarsPadding()
                         .padding(horizontal = 32.dp),
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
@@ -203,7 +199,6 @@ fun DownloadsScreen(
                     )
                 }
             } else {
-                // --- FILE LIST ---
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
                     items(uiState.files) { item ->
                         val isSelected = selectedItems.contains(item)
@@ -243,7 +238,6 @@ fun DownloadsScreen(
                                             .size(56.dp)
                                             .clip(RoundedCornerShape(8.dp))
                                     )
-                                    // Overlay checkmark when selected
                                     AnimatedVisibility(visible = isSelected, enter = fadeIn(), exit = fadeOut()) {
                                         Box(
                                             modifier = Modifier
@@ -261,13 +255,11 @@ fun DownloadsScreen(
                                 }
                             },
                             trailingContent = {
-                                // Hide action buttons in selection mode to prevent accidental clicks
                                 if (!isSelectionMode) {
                                     Row {
                                         IconButton(onClick = { viewModel.playFile(item) }) {
                                             Icon(Icons.Rounded.PlayArrow, contentDescription = "play", Modifier.size(34.dp))
                                         }
-
                                         IconButton(onClick = { viewModel.shareFile(item) }) {
                                             Icon(Icons.Rounded.Share, contentDescription = "Share")
                                         }
@@ -285,7 +277,7 @@ fun DownloadsScreen(
                                 } else {
                                     RadioButton(
                                         selected = isSelected,
-                                        onClick = null // Handled by ListItem click
+                                        onClick = null
                                     )
                                 }
                             }

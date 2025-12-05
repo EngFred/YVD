@@ -4,12 +4,15 @@ import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.DownloadForOffline
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -33,7 +36,7 @@ fun MainScreen() {
                 val currentDestination = navBackStackEntry?.destination
 
                 val navItemColors = NavigationBarItemDefaults.colors(
-                    indicatorColor = Color.White, // White pill
+                    indicatorColor = Color.White,
                     selectedIconColor = MaterialTheme.colorScheme.primary,
                     selectedTextColor = Color.White,
                     unselectedIconColor = Color.White.copy(alpha = 0.6f),
@@ -76,6 +79,9 @@ fun MainScreen() {
         NavHost(
             navController = navController,
             startDestination = "home",
+            modifier = Modifier
+                .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
         ) {
             composable(
                 route = "home",

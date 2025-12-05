@@ -2,7 +2,7 @@ package com.engfred.yvd.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val Purple80 = Color(0xFFca1e44)
+val TomatoRedDark = Color(0xFFca1e44)
 val PurpleGrey80 = Color(0xFFCCC2DC)
 val Pink80 = Color(0xFFEFB8C8)
 

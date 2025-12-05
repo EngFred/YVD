@@ -296,13 +296,15 @@ class YoutubeRepositoryImpl @Inject constructor(
 
         Log.d(TAG, "Starting download for ${file.name}. Size: $totalLength bytes")
 
-        // If file is < 1MB, overhead of threads isn't worth it. Using single thread.
-        // Otherwise, use 4 threads to maximize bandwidth.
-        if (totalLength < 1 * 1024 * 1024) {
-            Log.d(TAG, "File small (<1MB) or unknown size. Using Single Thread.")
+
+        // If file is < 500KB, overhead of threads isn't worth it. Use single thread.
+        // Otherwise, use multi-threading.
+        if (totalLength < 500 * 1024) {
+            Log.d(TAG, "File small (<500KB). Using Single Thread.")
             downloadStreamSingle(stream.content, file, totalLength, flow, statusPrefix)
             return@withContext
         }
+
 
         val threadCount = 4
         val partSize = totalLength / threadCount
