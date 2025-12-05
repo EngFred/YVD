@@ -18,7 +18,7 @@ YVD uses the NewPipe Extractor engine to parse metadata and OkHttp for raw strea
 <img src="https://github.com/user-attachments/assets/69d49b42-1784-4118-9a86-cec2e2fd476d" width="200">
 <img src="https://github.com/user-attachments/assets/d64a57c5-9afd-4937-927e-3c804dc8e5f5" width="200">
 <img src="https://github.com/user-attachments/assets/a18fca2c-9fb8-4443-b539-50f25b119929" width="200">
-<img src="https://github.com/user-attachments/assets/09455682-1c92-44b2-9429-8d4b6d4e12da" width="200"> |
+<img src="https://github.com/user-attachments/assets/09455682-1c92-44b2-9429-8d4b6d4e12da" width="200">
 ---
 
 ## Tech Stack & Architecture
