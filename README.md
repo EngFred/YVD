@@ -14,12 +14,12 @@ YVD uses the NewPipe Extractor engine to parse metadata and OkHttp for raw strea
 ---
 
 ### App Interface
-<img src="https://github.com/user-attachments/assets/daacf372-1b8a-411e-bc60-bc5053cd84ef" width="200">
-<img src="https://github.com/user-attachments/assets/14d92a4a-4791-448c-a09e-db1df5cb83ce" width="200">
-<img src="https://github.com/user-attachments/assets/be771b28-d628-4dc2-9505-e71a7019c7d2" width="200">
-<img src="https://github.com/user-attachments/assets/fcfdcb9b-8a40-45b7-aaa8-3e47288b6592" width="200">
-<img src="https://github.com/user-attachments/assets/248bf8b9-6cd7-420a-8e78-3c975748442f" width="200">
-<img src="https://github.com/user-attachments/assets/569bcda9-ce6d-465b-985d-da8c5e277d55" width="200">
+<img src="https://github.com/user-attachments/assets/daacf372-1b8a-411e-bc60-bc5053cd84ef" width="250">
+<img src="https://github.com/user-attachments/assets/14d92a4a-4791-448c-a09e-db1df5cb83ce" width="250">
+<img src="https://github.com/user-attachments/assets/be771b28-d628-4dc2-9505-e71a7019c7d2" width="250">
+<img src="https://github.com/user-attachments/assets/fcfdcb9b-8a40-45b7-aaa8-3e47288b6592" width="250">
+<img src="https://github.com/user-attachments/assets/248bf8b9-6cd7-420a-8e78-3c975748442f" width="250">
+<img src="https://github.com/user-attachments/assets/569bcda9-ce6d-465b-985d-da8c5e277d55" width="250">
 ---
 
 ## Tech Stack & Architecture
