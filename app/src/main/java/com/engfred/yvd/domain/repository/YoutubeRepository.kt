@@ -1,7 +1,7 @@
 package com.engfred.yvd.domain.repository
 
 import com.engfred.yvd.common.Resource
-import com.engfred.yvd.data.repository.DownloadStatus
+import com.engfred.yvd.domain.model.DownloadStatus
 import com.engfred.yvd.domain.model.VideoMetadata
 import kotlinx.coroutines.flow.Flow
 

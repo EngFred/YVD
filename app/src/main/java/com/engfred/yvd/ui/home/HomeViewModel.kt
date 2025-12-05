@@ -30,7 +30,7 @@ data class HomeState(
     val isDownloading: Boolean = false,
     val downloadComplete: Boolean = false,
     val downloadedFile: File? = null,
-    val isAudio: Boolean = false // FIX: Added this field to track download type
+    val isAudio: Boolean = false
 )
 
 @HiltViewModel
@@ -48,7 +48,9 @@ class HomeViewModel @Inject constructor(
             videoMetadata = null,
             error = null,
             downloadComplete = false,
-            downloadedFile = null
+            downloadedFile = null,
+            isDownloading = false,
+            downloadProgress = 0f
         )
     }
 
@@ -72,13 +74,14 @@ class HomeViewModel @Inject constructor(
     fun downloadMedia(url: String, formatId: String, isAudio: Boolean) {
         val title = _state.value.videoMetadata?.title ?: "video"
 
+        // Reset state for new download
         _state.value = _state.value.copy(
             isDownloading = true,
             downloadProgress = 0f,
-            downloadStatusText = "Starting ${if(isAudio) "Audio" else "Video"} Download...",
+            downloadStatusText = "Initializing...",
             downloadComplete = false,
             error = null,
-            isAudio = isAudio // FIX: Update state so UI knows we are downloading audio
+            isAudio = isAudio
         )
 
         val constraints = Constraints.Builder()
@@ -103,34 +106,64 @@ class HomeViewModel @Inject constructor(
     }
 
     private fun observeWork(id: UUID) {
+        // Observe LiveData and update StateFlow
         workManager.getWorkInfoByIdLiveData(id).observeForever { workInfo ->
             if (workInfo == null) return@observeForever
+
             when (workInfo.state) {
+                WorkInfo.State.ENQUEUED -> {
+                    _state.value = _state.value.copy(
+                        isDownloading = true,
+                        downloadStatusText = "Pending..."
+                    )
+                }
                 WorkInfo.State.RUNNING -> {
+                    // FIX: This now matches the keys set in the Worker
                     val progress = workInfo.progress.getFloat("progress", 0f)
                     val status = workInfo.progress.getString("status") ?: "Downloading..."
-                    _state.value = _state.value.copy(isDownloading = true, downloadProgress = progress, downloadStatusText = status)
+
+                    _state.value = _state.value.copy(
+                        isDownloading = true,
+                        downloadProgress = progress,
+                        downloadStatusText = status
+                    )
                 }
                 WorkInfo.State.SUCCEEDED -> {
                     val path = workInfo.outputData.getString("filePath")
                     val file = if (path != null) File(path) else null
-                    _state.value = _state.value.copy(isDownloading = false, downloadComplete = true, downloadProgress = 100f, downloadedFile = file, downloadStatusText = "Complete")
+
+                    _state.value = _state.value.copy(
+                        isDownloading = false,
+                        downloadComplete = true,
+                        downloadProgress = 100f,
+                        downloadedFile = file,
+                        downloadStatusText = "Download Complete"
+                    )
                 }
                 WorkInfo.State.FAILED -> {
-                    val errorMsg = workInfo.outputData.getString("error") ?: "Failed"
-                    _state.value = _state.value.copy(isDownloading = false, error = errorMsg)
+                    val errorMsg = workInfo.outputData.getString("error") ?: "Download Failed"
+                    _state.value = _state.value.copy(
+                        isDownloading = false,
+                        error = errorMsg,
+                        downloadStatusText = ""
+                    )
                 }
-                else -> {}
+                else -> {} // CANCELLED or BLOCKED
             }
         }
     }
 
     fun openMediaFile(context: Context) {
         val file = _state.value.downloadedFile ?: return
+        if (!file.exists()) {
+            _state.value = _state.value.copy(error = "File not found. It may have been deleted.")
+            return
+        }
+
         try {
             val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
             val extension = file.extension.lowercase()
-            // Improved MIME type detection
+
             val mimeType = when(extension) {
                 "m4a", "mp3", "wav", "ogg" -> "audio/*"
                 else -> "video/*"
