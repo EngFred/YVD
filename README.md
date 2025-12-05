@@ -83,17 +83,3 @@ The Repository uses callbackFlow to emit a sealed DownloadStatus class. This all
 
 ### 4. Secure File Access
 The app targets Android 10+ (Scoped Storage) but utilizes FileProvider to securely share the downloaded file Uri with external video player apps. It grants temporary read permissions via Intent.FLAG_GRANT_READ_URI_PERMISSION, ensuring the app remains secure while interacting with the Android ecosystem.
-
-## Installation
-Clone the repository
-
-Bash
-
-git clone [https://github.com/EngFred/YVD.git](https://github.com/EngFred/YVD.git)
-Open in Android Studio.
-
-Sync Gradle to download dependencies.
-
-Run on an Emulator or Physical Device.
-
-Disclaimer: This application is for educational purposes only. Downloading copyrighted content from YouTube without permission may violate their Terms of Service. Please use responsibly.
