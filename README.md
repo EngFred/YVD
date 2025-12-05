@@ -8,17 +8,17 @@
 
 [![Download APK](https://img.shields.io/github/v/release/EngFred/YVD?style=for-the-badge&label=Download%20APK&color=success&logo=android)](https://github.com/EngFred/YVD/releases/download/v1.1.0/yvd.apk)
 
-**YVD** is a lightweight, high-performance native Android application built with Kotlin and Jetpack Compose. It allows users to download YouTube videos instantly without the bloat of external binarie.
+**YVD** is a lightweight, high-performance native Android application built with Kotlin and Jetpack Compose. It allows users to download YouTube videos and audio only instantly without the bloat of external binarie and at very fast download speeds.
 YVD uses the NewPipe Extractor engine to parse metadata and OkHttp for raw stream downloading. This results in instant startup times and a significantly smaller APK size.
 
 ---
 
 ### App Interface
-<img src="https://github.com/user-attachments/assets/bc704ec6-0a91-45db-9675-939d630fcedd" width="200">
-<img src="https://github.com/user-attachments/assets/69d49b42-1784-4118-9a86-cec2e2fd476d" width="200">
-<img src="https://github.com/user-attachments/assets/d64a57c5-9afd-4937-927e-3c804dc8e5f5" width="200">
-<img src="https://github.com/user-attachments/assets/a18fca2c-9fb8-4443-b539-50f25b119929" width="200">
-<img src="https://github.com/user-attachments/assets/09455682-1c92-44b2-9429-8d4b6d4e12da" width="200">
+<img src="https://github.com/user-attachments/assets/14d92a4a-4791-448c-a09e-db1df5cb83ce" width="200">
+<img src="https://github.com/user-attachments/assets/be771b28-d628-4dc2-9505-e71a7019c7d2" width="200">
+<img src="https://github.com/user-attachments/assets/fcfdcb9b-8a40-45b7-aaa8-3e47288b6592" width="200">
+<img src="https://github.com/user-attachments/assets/248bf8b9-6cd7-420a-8e78-3c975748442f" width="200">
+<img src="https://github.com/user-attachments/assets/569bcda9-ce6d-465b-985d-da8c5e277d55" width="200">
 ---
 
 ## Tech Stack & Architecture
