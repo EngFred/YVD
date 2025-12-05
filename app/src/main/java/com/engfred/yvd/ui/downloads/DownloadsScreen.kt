@@ -91,7 +91,7 @@ fun DownloadsScreen(
                             }
                         }
                     )
-                    Divider()
+                    HorizontalDivider()
                 }
             }
         }

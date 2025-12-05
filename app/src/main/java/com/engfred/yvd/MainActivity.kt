@@ -21,9 +21,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             YVDTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { _ ->
-                    MainScreen()
-                }
+                MainScreen()
             }
         }
     }

@@ -1,17 +1,14 @@
 package com.engfred.yvd.ui.home
 
-import android.content.Context
-import android.content.Intent
-import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.*
 import com.engfred.yvd.common.Resource
 import com.engfred.yvd.domain.model.VideoMetadata
 import com.engfred.yvd.domain.repository.YoutubeRepository
+import com.engfred.yvd.util.MediaHelper
 import com.engfred.yvd.worker.DownloadWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
@@ -36,12 +33,12 @@ data class HomeState(
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val repository: YoutubeRepository,
-    @ApplicationContext private val context: Context
+    private val mediaHelper: MediaHelper,
+    private val workManager: WorkManager
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(HomeState())
     val state = _state.asStateFlow()
-    private val workManager = WorkManager.getInstance(context)
 
     // Track current worker ID to enable cancellation
     private var currentWorkId: UUID? = null
@@ -173,53 +170,21 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    fun openMediaFile(context: Context) {
+    fun openMediaFile() {
         val file = _state.value.downloadedFile ?: return
-        if (!file.exists()) {
-            _state.value = _state.value.copy(error = "File not found. It may have been deleted.")
-            return
-        }
-
         try {
-            val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-            val extension = file.extension.lowercase()
-            val mimeType = when(extension) {
-                "m4a", "mp3", "wav", "ogg" -> "audio/*"
-                else -> "video/*"
-            }
-
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, mimeType)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            context.startActivity(intent)
+            mediaHelper.openMediaFile(file)
         } catch (e: Exception) {
-            _state.value = _state.value.copy(error = "Could not open file: ${e.message}")
+            _state.value = _state.value.copy(error = e.message)
         }
     }
 
-    fun shareMediaFile(context: Context) {
+    fun shareMediaFile() {
         val file = _state.value.downloadedFile ?: return
-        if (!file.exists()) return
-
         try {
-            val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
-            val extension = file.extension.lowercase()
-            val mimeType = when(extension) {
-                "m4a", "mp3", "wav", "ogg" -> "audio/*"
-                else -> "video/*"
-            }
-
-            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                type = mimeType
-                putExtra(Intent.EXTRA_STREAM, uri)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-
-            context.startActivity(Intent.createChooser(shareIntent, "Share Media"))
+            mediaHelper.shareMediaFile(file)
         } catch (e: Exception) {
-            _state.value = _state.value.copy(error = "Could not share file: ${e.message}")
+            _state.value = _state.value.copy(error = e.message)
         }
     }
 }

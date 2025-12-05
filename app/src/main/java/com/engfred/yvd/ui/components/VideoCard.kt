@@ -6,6 +6,7 @@ import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -56,9 +57,9 @@ fun VideoCard(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Download in Progress...")
                     } else {
-                        Icon(Icons.Rounded.Download, contentDescription = null)
+                        Icon(Icons.Rounded.Download, contentDescription = null, tint = Color.White)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Download")
+                        Text("Download", color = Color.White)
                     }
                 }
             }

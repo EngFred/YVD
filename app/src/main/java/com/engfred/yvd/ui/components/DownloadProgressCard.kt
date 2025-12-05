@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 fun DownloadProgressCard(
+    modifier: Modifier = Modifier,
     statusText: String,
     progress: Float,
     isDownloading: Boolean,
@@ -29,7 +30,7 @@ fun DownloadProgressCard(
     onShare: () -> Unit
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {

@@ -9,10 +9,13 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ContentPaste
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -37,9 +40,10 @@ fun HomeScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
     val snackbarHostState = remember { SnackbarHostState() }
 
-    var urlText by remember { mutableStateOf("") }
-    var showFormatDialog by remember { mutableStateOf(false) }
-    var showCancelDialog by remember { mutableStateOf(false) }
+    var urlText by rememberSaveable { mutableStateOf("") }
+
+    var showFormatDialog by rememberSaveable { mutableStateOf(false) }
+    var showCancelDialog by rememberSaveable { mutableStateOf(false) }
 
     // Permission Launcher
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -62,7 +66,7 @@ fun HomeScreen(
             viewModel.clearError()
         }
     }
-    
+
     if (showCancelDialog) {
         ConfirmationDialog(
             title = "Cancel Download?",
@@ -77,6 +81,8 @@ fun HomeScreen(
     }
 
     Scaffold(
+        // Prevent inner scaffold from doubling up system window insets, relying on padding instead
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text("YV Downloader") },
@@ -91,10 +97,14 @@ fun HomeScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp),
+                .padding(padding) // Pushes content below TopBar
+                .consumeWindowInsets(padding) // Good practice when nesting scaffolds
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp), // Horizontal padding only
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            Spacer(modifier = Modifier.height(16.dp))
+
             // URL Input Field
             OutlinedTextField(
                 value = urlText,
@@ -139,9 +149,9 @@ fun HomeScreen(
                     enabled = !state.isLoading
                 ) {
                     if (state.isLoading) {
-                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
                     } else {
-                        Text("Get Video Info")
+                        Text("Get Video Info", color = Color.White)
                     }
                 }
             }
@@ -166,10 +176,15 @@ fun HomeScreen(
                     isComplete = state.downloadComplete,
                     isAudio = state.isAudio,
                     onCancel = { showCancelDialog = true },
-                    onPlay = { viewModel.openMediaFile(context) },
-                    onShare = { viewModel.shareMediaFile(context) }
+                    onPlay = { viewModel.openMediaFile() },
+                    onShare = { viewModel.shareMediaFile() }
                 )
             }
+
+            // Adding a spacer at the bottom of the scrollable column.
+            // This ensures content clears the navigation bar or system gestures in landscape
+            Spacer(modifier = Modifier.height(80.dp))
+            Spacer(modifier = Modifier.windowInsetsBottomHeight(WindowInsets.safeDrawing))
         }
     }
 
