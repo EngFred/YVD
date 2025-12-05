@@ -6,7 +6,7 @@
 ![Hilt](https://img.shields.io/badge/Hilt-Dependency%20Injection-orange?style=for-the-badge)
 ![WorkManager](https://img.shields.io/badge/WorkManager-Background%20Sync-red?style=for-the-badge&logo=android&logoColor=white)
 
-[![Download APK](https://img.shields.io/github/v/release/EngFred/YVD?style=for-the-badge&label=Download%20APK&color=success&logo=android)](https://github.com/EngFred/YVD/releases/download/v1.2.2/yvd.apk)
+[![Download APK](https://img.shields.io/github/v/release/EngFred/YVD?style=for-the-badge&label=Download%20APK&color=success&logo=android)](https://github.com/EngFred/YVD/releases/download/v1.2.2/yvd_v1.2.2.apk)
 
 **YVD** is a lightweight, high-performance native Android application built with Kotlin and Jetpack Compose. It allows users to download YouTube videos and audio only instantly without the bloat of external binarie and at very fast download speeds.
 YVD uses the NewPipe Extractor engine to parse metadata and OkHttp for raw stream downloading. This results in instant startup times and a significantly smaller APK size.
@@ -20,6 +20,7 @@ YVD uses the NewPipe Extractor engine to parse metadata and OkHttp for raw strea
 <img src="https://github.com/user-attachments/assets/fcfdcb9b-8a40-45b7-aaa8-3e47288b6592" width="250">
 <img src="https://github.com/user-attachments/assets/248bf8b9-6cd7-420a-8e78-3c975748442f" width="250">
 <img src="https://github.com/user-attachments/assets/569bcda9-ce6d-465b-985d-da8c5e277d55" width="250">
+
 ---
 
 ## Tech Stack & Architecture
