@@ -1,6 +1,8 @@
 package com.engfred.yvd.ui.home
 
 import android.Manifest
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -14,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ContentPaste
 import androidx.compose.material.icons.rounded.SettingsBrightness
+import androidx.compose.material.icons.rounded.SmartDisplay
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -29,6 +32,8 @@ import com.engfred.yvd.ui.components.DownloadProgressCard
 import com.engfred.yvd.ui.components.FormatSelectionSheet
 import com.engfred.yvd.ui.components.ThemeSelectionDialog
 import com.engfred.yvd.ui.components.VideoCard
+import androidx.core.net.toUri
+import com.engfred.yvd.util.openYoutube
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -117,6 +122,22 @@ fun HomeScreen(
                     }
                 }
             )
+        },
+        floatingActionButton = {
+            ExtendedFloatingActionButton(
+                // Added padding to clear the Bottom Navigation Bar in MainScreen
+                modifier = Modifier.padding(bottom = 135.dp),
+                onClick = { openYoutube(context) },
+                containerColor = Color(0xFFFF0000), // YouTube Brand Red
+                contentColor = Color.White
+            ) {
+                // Using SmartDisplay as it resembles a video screen.
+                Icon(
+                    imageVector = Icons.Rounded.SmartDisplay,
+                    modifier = Modifier.size(34.dp),
+                    contentDescription = "Open YouTube"
+                )
+            }
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { padding ->

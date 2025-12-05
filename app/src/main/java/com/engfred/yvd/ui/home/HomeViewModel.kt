@@ -44,8 +44,6 @@ class HomeViewModel @Inject constructor(
 
     private val _state = MutableStateFlow(HomeState())
     val state = _state.asStateFlow()
-
-    // Expose Theme for the UI Dialog to know current selection
     val currentTheme = themeRepository.theme.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
