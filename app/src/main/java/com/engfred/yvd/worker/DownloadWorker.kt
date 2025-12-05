@@ -16,6 +16,7 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.engfred.yvd.domain.model.DownloadStatus
 import com.engfred.yvd.domain.repository.YoutubeRepository
+import com.engfred.yvd.receiver.CancelReceiver
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.collectLatest
@@ -25,8 +26,8 @@ import java.io.File
  * Background Worker executed by WorkManager.
  *
  * Responsibilities:
- * 1. Executes the long-running download task even if the user closes the app.
- * 2. Manages Foreground Service notifications (Progress bars).
+ * 1. Executes the long-running download task.
+ * 2. Manages Foreground Service notifications with Cancel Action.
  * 3. Triggers the MediaScanner so downloaded files appear in Gallery/Music apps.
  */
 @HiltWorker
@@ -50,7 +51,7 @@ class DownloadWorker @AssistedInject constructor(
         val typeLabel = if (isAudio) "Audio" else "Video"
 
         try {
-            // Promote to Foreground Service immediately to prevent system kill
+            // Promote to Foreground Service immediately
             setForeground(createForegroundInfo(notificationId, title, 0, true, typeLabel))
 
             var resultFile: File? = null
@@ -58,15 +59,13 @@ class DownloadWorker @AssistedInject constructor(
             repository.downloadVideo(url, formatId, title, isAudio).collectLatest { status ->
                 when (status) {
                     is DownloadStatus.Progress -> {
-                        // Pass progress back to UI via WorkManager Data
                         setProgress(
                             workDataOf(
                                 "progress" to status.progress,
                                 "status" to status.text
                             )
                         )
-
-                        // Update Notification UI
+                        // Update Notification
                         if (status.progress > 0) {
                             setForeground(createForegroundInfo(notificationId, title, status.progress.toInt(), false, typeLabel))
                         }
@@ -78,7 +77,6 @@ class DownloadWorker @AssistedInject constructor(
 
             // Validation and Media Scan
             return if (resultFile != null && resultFile!!.exists()) {
-                // Scan file so it shows up in Android Gallery / Music Players
                 MediaScannerConnection.scanFile(
                     context,
                     arrayOf(resultFile!!.absolutePath),
@@ -91,6 +89,11 @@ class DownloadWorker @AssistedInject constructor(
                 throw Exception("File verification failed")
             }
         } catch (e: Exception) {
+            // Check if it was cancelled by user
+            if (isStopped) {
+                // If stopped by user, we can silence the error or show "Cancelled"
+                return Result.failure()
+            }
             e.printStackTrace()
             showFailureNotification(notificationId + 1, title, e.message ?: "Error")
             return Result.failure(workDataOf("error" to e.message))
@@ -98,15 +101,27 @@ class DownloadWorker @AssistedInject constructor(
     }
 
     /**
-     * Creates the notification required for Foreground Services.
-     * Note: Android 14+ requires `ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC`.
+     * Creates the notification with a CANCEL Action button.
      */
     private fun createForegroundInfo(id: Int, title: String, progress: Int, indeterminate: Boolean, typeLabel: String): ForegroundInfo {
+        // 1. Intent to launch app
         val intent = Intent(context, com.engfred.yvd.MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
         val pendingIntent = PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_IMMUTABLE)
 
+        // 2. Intent to CANCEL download (Broadcast)
+        val cancelIntent = Intent(context, CancelReceiver::class.java).apply {
+            action = "CANCEL_DOWNLOAD"
+        }
+        val pendingCancelIntent = PendingIntent.getBroadcast(
+            context,
+            0,
+            cancelIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        // 3. Build Notification
         val notification = NotificationCompat.Builder(context, "download_channel")
             .setContentTitle("Downloading $typeLabel")
             .setContentText("$title ($progress%)")
@@ -115,6 +130,7 @@ class DownloadWorker @AssistedInject constructor(
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setProgress(100, progress, indeterminate)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Cancel", pendingCancelIntent)
             .build()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {

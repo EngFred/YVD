@@ -8,34 +8,23 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Audiotrack
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentPaste
-import androidx.compose.material.icons.rounded.Download
-import androidx.compose.material.icons.rounded.Movie
-import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
-import com.engfred.yvd.domain.model.VideoMetadata
+import com.engfred.yvd.ui.components.ConfirmationDialog
+import com.engfred.yvd.ui.components.DownloadProgressCard
+import com.engfred.yvd.ui.components.FormatSelectionSheet
+import com.engfred.yvd.ui.components.VideoCard
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,8 +36,10 @@ fun HomeScreen(
     val clipboardManager = LocalClipboardManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val snackbarHostState = remember { SnackbarHostState() }
+
     var urlText by remember { mutableStateOf("") }
     var showFormatDialog by remember { mutableStateOf(false) }
+    var showCancelDialog by remember { mutableStateOf(false) }
 
     // Permission Launcher
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -59,7 +50,6 @@ fun HomeScreen(
         }
     }
 
-    // Request permission on start
     LaunchedEffect(Unit) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -68,12 +58,22 @@ fun HomeScreen(
 
     LaunchedEffect(state.error) {
         state.error?.let { errorMessage ->
-            snackbarHostState.showSnackbar(
-                message = errorMessage,
-                duration = SnackbarDuration.Long
-            )
+            snackbarHostState.showSnackbar(message = errorMessage, duration = SnackbarDuration.Long)
             viewModel.clearError()
         }
+    }
+    
+    if (showCancelDialog) {
+        ConfirmationDialog(
+            title = "Cancel Download?",
+            text = "Are you sure you want to stop the current download?",
+            confirmText = "Yes, Cancel",
+            onConfirm = {
+                viewModel.cancelDownload()
+                showCancelDialog = false
+            },
+            onDismiss = { showCancelDialog = false }
+        )
     }
 
     Scaffold(
@@ -86,17 +86,7 @@ fun HomeScreen(
                 )
             )
         },
-        snackbarHost = {
-            SnackbarHost(hostState = snackbarHostState) { data ->
-                Snackbar(
-                    modifier = Modifier.padding(16.dp),
-                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                    contentColor = MaterialTheme.colorScheme.onErrorContainer
-                ) {
-                    Text(text = data.visuals.message, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                }
-            }
-        }
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { padding ->
         Column(
             modifier = Modifier
@@ -145,17 +135,11 @@ fun HomeScreen(
                         viewModel.loadVideoInfo(urlText)
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(
-                        contentColor = Color.White
-                    ),
+                    colors = ButtonDefaults.buttonColors(contentColor = Color.White),
                     enabled = !state.isLoading
                 ) {
                     if (state.isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp),
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            strokeWidth = 2.dp
-                        )
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
                     } else {
                         Text("Get Video Info")
                     }
@@ -168,239 +152,39 @@ fun HomeScreen(
                 VideoCard(
                     metadata = metadata,
                     isDownloading = state.isDownloading,
-                    onDownloadClick = {
-                        showFormatDialog = true
-                    }
+                    onDownloadClick = { showFormatDialog = true }
                 )
             }
 
-            // Downloading Progress Section
+            // Download Progress
             if (state.isDownloading || state.downloadComplete) {
                 Spacer(modifier = Modifier.height(24.dp))
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = state.downloadStatusText,
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Bold
-                            )
-
-                            // Cancel Button visible only during download
-                            if (state.isDownloading && !state.downloadComplete) {
-                                IconButton(
-                                    onClick = { viewModel.cancelDownload() },
-                                    modifier = Modifier.size(24.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Rounded.Close,
-                                        contentDescription = "Cancel",
-                                        tint = MaterialTheme.colorScheme.error
-                                    )
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        if (state.isDownloading && state.downloadProgress == 0f) {
-                            LinearProgressIndicator(
-                                modifier = Modifier.fillMaxWidth(),
-                                trackColor = MaterialTheme.colorScheme.surfaceDim,
-                            )
-                        } else {
-                            LinearProgressIndicator(
-                                progress = { state.downloadProgress / 100f },
-                                modifier = Modifier.fillMaxWidth(),
-                                trackColor = MaterialTheme.colorScheme.surfaceDim,
-                            )
-                        }
-
-                        // Play and Share Buttons
-                        AnimatedVisibility(visible = state.downloadComplete) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 16.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Button(
-                                    onClick = { viewModel.openMediaFile(context) },
-                                    modifier = Modifier.weight(1f),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
-                                ) {
-                                    Icon(Icons.Rounded.PlayArrow, contentDescription = null)
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(if (state.isAudio) "Play" else "Play")
-                                }
-
-                                OutlinedButton(
-                                    onClick = { viewModel.shareMediaFile(context) },
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Icon(Icons.Rounded.Share, contentDescription = null)
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Share")
-                                }
-                            }
-                        }
-                    }
-                }
+                DownloadProgressCard(
+                    statusText = state.downloadStatusText,
+                    progress = state.downloadProgress,
+                    isDownloading = state.isDownloading,
+                    isComplete = state.downloadComplete,
+                    isAudio = state.isAudio,
+                    onCancel = { showCancelDialog = true },
+                    onPlay = { viewModel.openMediaFile(context) },
+                    onShare = { viewModel.shareMediaFile(context) }
+                )
             }
         }
     }
 
     if (showFormatDialog && state.videoMetadata != null) {
-        ModalBottomSheet(onDismissRequest = { showFormatDialog = false }) {
-            val metadata = state.videoMetadata!!
-            val tabTitles = listOf("Video", "Audio")
-            var selectedTab by remember { mutableIntStateOf(0) }
-
-            Column(modifier = Modifier.fillMaxWidth()) {
-                TabRow(selectedTabIndex = selectedTab) {
-                    tabTitles.forEachIndexed { index, title ->
-                        Tab(
-                            selected = selectedTab == index,
-                            onClick = { selectedTab = index },
-                            text = {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        if (index == 0) Icons.Rounded.Movie else Icons.Rounded.Audiotrack,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(title)
-                                }
-                            }
-                        )
-                    }
+        FormatSelectionSheet(
+            metadata = state.videoMetadata!!,
+            onDismiss = { showFormatDialog = false },
+            onFormatSelected = { formatId, isAudio ->
+                showFormatDialog = false
+                // Permission Check happens here before downloading
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                 }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                if (selectedTab == 0) {
-                    // VIDEO LIST
-                    LazyColumn(
-                        contentPadding = PaddingValues(bottom = 32.dp)
-                    ) {
-                        items(metadata.videoFormats) { format ->
-                            ListItem(
-                                headlineContent = { Text(format.resolution) },
-                                supportingContent = { Text("${format.ext.uppercase()} • ${format.fileSize}") },
-                                leadingContent = {
-                                    Icon(Icons.Rounded.Movie, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                },
-                                trailingContent = {
-                                    Icon(
-                                        Icons.Rounded.Download,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                },
-                                modifier = Modifier.clickable {
-                                    showFormatDialog = false
-                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                        permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                                    }
-                                    viewModel.downloadMedia(urlText, format.formatId, isAudio = false)
-                                }
-                            )
-                            Divider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.surfaceVariant)
-                        }
-                    }
-                } else {
-                    // AUDIO LIST
-                    LazyColumn(
-                        contentPadding = PaddingValues(bottom = 32.dp)
-                    ) {
-                        items(metadata.audioFormats) { format ->
-                            ListItem(
-                                headlineContent = { Text(format.bitrate) },
-                                supportingContent = { Text("${format.ext.uppercase()} • ${format.fileSize}") },
-                                leadingContent = {
-                                    Icon(Icons.Rounded.Audiotrack, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
-                                },
-                                trailingContent = {
-                                    Icon(
-                                        Icons.Rounded.Download,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                },
-                                modifier = Modifier.clickable {
-                                    showFormatDialog = false
-                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                        permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                                    }
-                                    viewModel.downloadMedia(urlText, format.formatId, isAudio = true)
-                                }
-                            )
-                            Divider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.surfaceVariant)
-                        }
-                    }
-                }
+                viewModel.downloadMedia(urlText, formatId, isAudio)
             }
-        }
-    }
-}
-
-@Composable
-fun VideoCard(
-    metadata: VideoMetadata,
-    isDownloading: Boolean,
-    onDownloadClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(4.dp)
-    ) {
-        Column {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(metadata.thumbnailUrl)
-                    .crossfade(true)
-                    .build(),
-                contentDescription = null,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(200.dp),
-                contentScale = ContentScale.Crop
-            )
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = metadata.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 2
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                Button(
-                    onClick = onDownloadClick,
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !isDownloading
-                ) {
-                    if (isDownloading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                            strokeWidth = 2.dp
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Download in Progress...")
-                    } else {
-                        Icon(Icons.Rounded.Download, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Download")
-                    }
-                }
-            }
-        }
+        )
     }
 }

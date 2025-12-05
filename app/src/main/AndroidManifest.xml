@@ -62,5 +62,11 @@
             android:exported="false"
             tools:node="merge" />
 
+        <receiver android:name=".receiver.CancelReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="CANCEL_DOWNLOAD"/>
+            </intent-filter>
+        </receiver>
+
     </application>
 </manifest>
