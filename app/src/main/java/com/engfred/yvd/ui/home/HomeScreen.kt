@@ -13,8 +13,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Audiotrack
 import androidx.compose.material.icons.rounded.ContentPaste
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -200,7 +202,7 @@ fun HomeScreen(
 
                         AnimatedVisibility(visible = state.downloadComplete) {
                             Button(
-                                onClick = { viewModel.openVideoFile(context) },
+                                onClick = { viewModel.openMediaFile(context) },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(top = 16.dp),
@@ -208,7 +210,8 @@ fun HomeScreen(
                             ) {
                                 Icon(Icons.Rounded.PlayArrow, contentDescription = null)
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Play Video")
+                                // FIX: state.isAudio is now valid
+                                Text(if (state.isAudio) "Play Audio" else "Play Video")
                             }
                         }
                     }
@@ -219,36 +222,99 @@ fun HomeScreen(
 
     if (showFormatDialog && state.videoMetadata != null) {
         ModalBottomSheet(onDismissRequest = { showFormatDialog = false }) {
-            Text(
-                "Select Quality",
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-            )
-            LazyColumn {
-                items(state.videoMetadata!!.formats) { format ->
-                    ListItem(
-                        headlineContent = { Text(format.resolution) },
-                        supportingContent = { Text("${format.ext} • ${format.fileSize}") },
-                        trailingContent = {
-                            Icon(
-                                Icons.Rounded.Download,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        },
-                        modifier = Modifier.clickable {
-                            showFormatDialog = false
-                            // Check permissions before starting download
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            val metadata = state.videoMetadata!!
+            val tabTitles = listOf("Video", "Audio")
+            var selectedTab by remember { mutableIntStateOf(0) }
+
+            Column(modifier = Modifier.fillMaxWidth()) {
+                TabRow(selectedTabIndex = selectedTab) {
+                    tabTitles.forEachIndexed { index, title ->
+                        Tab(
+                            selected = selectedTab == index,
+                            onClick = { selectedTab = index },
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        if (index == 0) Icons.Rounded.Movie else Icons.Rounded.Audiotrack,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(title)
+                                }
                             }
-                            viewModel.downloadVideo(urlText, format.formatId)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                if (selectedTab == 0) {
+                    // VIDEO LIST
+                    LazyColumn(
+                        contentPadding = PaddingValues(bottom = 32.dp)
+                    ) {
+                        // FIX: Changed from items(metadata.formats) to items(metadata.videoFormats)
+                        items(metadata.videoFormats) { format ->
+                            ListItem(
+                                headlineContent = { Text(format.resolution) },
+                                supportingContent = { Text("${format.ext.uppercase()} • ${format.fileSize}") },
+                                leadingContent = {
+                                    Icon(Icons.Rounded.Movie, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                },
+                                trailingContent = {
+                                    Icon(
+                                        Icons.Rounded.Download,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                modifier = Modifier.clickable {
+                                    showFormatDialog = false
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                        permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                    }
+                                    // FIX: Added urlText parameter
+                                    viewModel.downloadMedia(urlText, format.formatId, isAudio = false)
+                                }
+                            )
+                            Divider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.surfaceVariant)
                         }
-                    )
-                    HorizontalDivider()
+                    }
+                } else {
+                    // AUDIO LIST
+                    LazyColumn(
+                        contentPadding = PaddingValues(bottom = 32.dp)
+                    ) {
+                        items(metadata.audioFormats) { format ->
+                            ListItem(
+                                // FIX: Changed format.quality to format.bitrate
+                                headlineContent = { Text(format.bitrate) },
+                                supportingContent = { Text("${format.ext.uppercase()} • ${format.fileSize}") },
+                                leadingContent = {
+                                    Icon(Icons.Rounded.Audiotrack, contentDescription = null, tint = MaterialTheme.colorScheme.secondary)
+                                },
+                                trailingContent = {
+                                    Icon(
+                                        Icons.Rounded.Download,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                modifier = Modifier.clickable {
+                                    showFormatDialog = false
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                        permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                    }
+                                    // FIX: Added urlText parameter
+                                    viewModel.downloadMedia(urlText, format.formatId, isAudio = true)
+                                }
+                            )
+                            Divider(modifier = Modifier.padding(horizontal = 16.dp), color = MaterialTheme.colorScheme.surfaceVariant)
+                        }
+                    }
                 }
             }
-            Spacer(modifier = Modifier.height(32.dp))
         }
     }
 }
@@ -298,7 +364,7 @@ fun VideoCard(
                     } else {
                         Icon(Icons.Rounded.Download, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Download Video")
+                        Text("Download")
                     }
                 }
             }

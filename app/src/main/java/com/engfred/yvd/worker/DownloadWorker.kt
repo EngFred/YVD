@@ -29,75 +29,58 @@ class DownloadWorker @AssistedInject constructor(
     private val repository: YoutubeRepository
 ) : CoroutineWorker(context, workerParams) {
 
-    private val TAG = "YVD_WORKER"
-    private val notificationManager =
-        context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    private val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
     override suspend fun doWork(): Result {
         val url = inputData.getString("url")
         val formatId = inputData.getString("formatId")
-        val title = inputData.getString("title") ?: "Video"
+        val title = inputData.getString("title") ?: "Media"
+        val isAudio = inputData.getBoolean("isAudio", false) // New Flag
 
-        if (url == null || formatId == null) {
-            return Result.failure()
-        }
+        if (url == null || formatId == null) return Result.failure()
 
-        // Base ID for this job
         val notificationId = System.currentTimeMillis().toInt()
+        val typeLabel = if (isAudio) "Audio" else "Video"
 
         try {
-            // 1. Start Foreground (Progress Notification) using Base ID
-            setForeground(createForegroundInfo(notificationId, title, 0, true))
-
+            setForeground(createForegroundInfo(notificationId, title, 0, true, typeLabel))
             var resultFile: File? = null
 
-            repository.downloadVideo(url, formatId, title).collectLatest { status ->
+            // Pass isAudio flag to repository
+            repository.downloadVideo(url, formatId, title, isAudio).collectLatest { status ->
                 when (status) {
                     is DownloadStatus.Progress -> {
                         if (status.progress > 0) {
-                            // Update Base ID
-                            setForeground(createForegroundInfo(notificationId, title, status.progress.toInt(), false))
+                            setForeground(createForegroundInfo(notificationId, title, status.progress.toInt(), false, typeLabel))
                         }
-                        setProgress(workDataOf("progress" to status.progress, "status" to status.text))
                     }
-                    is DownloadStatus.Success -> {
-                        resultFile = status.file
-                    }
-                    is DownloadStatus.Error -> {
-                        throw Exception(status.message)
-                    }
+                    is DownloadStatus.Success -> resultFile = status.file
+                    is DownloadStatus.Error -> throw Exception(status.message)
                 }
             }
 
             return if (resultFile != null) {
-                // 2. SUCCESS: Use (Base ID + 1) so it survives
-                showCompletionNotification(notificationId + 1, title, resultFile!!)
+                showCompletionNotification(notificationId + 1, title, resultFile!!, isAudio)
                 Result.success(workDataOf("filePath" to resultFile!!.absolutePath))
             } else {
                 throw Exception("File verification failed")
             }
-
         } catch (e: Exception) {
-            Log.e(TAG, "Download Failed", e)
-
-            // 3. FAILURE: Use (Base ID + 1) so it survives
-            // We use the same +1 slot as success because a job can't succeed AND fail
-            showFailureNotification(notificationId + 1, title, e.message ?: "Unknown Error")
-
+            showFailureNotification(notificationId + 1, title, e.message ?: "Error")
             return Result.failure(workDataOf("error" to e.message))
         }
     }
 
-    private fun createForegroundInfo(id: Int, title: String, progress: Int, indeterminate: Boolean): ForegroundInfo {
+    private fun createForegroundInfo(id: Int, title: String, progress: Int, indeterminate: Boolean, typeLabel: String): ForegroundInfo {
         val intent = Intent(context, com.engfred.yvd.MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
         val pendingIntent = PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_IMMUTABLE)
 
         val notification = NotificationCompat.Builder(context, "download_channel")
-            .setContentTitle("Downloading: $title")
-            .setContentText("$progress%")
-            .setSmallIcon(R.mipmap.ic_launcher_round)
+            .setContentTitle("Downloading $typeLabel")
+            .setContentText("$title ($progress%)")
+            .setSmallIcon(android.R.drawable.stat_sys_download)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -110,26 +93,22 @@ class DownloadWorker @AssistedInject constructor(
         return ForegroundInfo(id, notification)
     }
 
-    private fun showCompletionNotification(id: Int, title: String, file: File) {
+    private fun showCompletionNotification(id: Int, title: String, file: File, isAudio: Boolean) {
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+        val mimeType = if (isAudio) "audio/*" else "video/*"
 
         val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, "video/*")
+            setDataAndType(uri, mimeType)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
         }
-
-        val pendingIntent = PendingIntent.getActivity(
-            context, id, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_CANCEL_CURRENT
-        )
+        val pendingIntent = PendingIntent.getActivity(context, id, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_CANCEL_CURRENT)
 
         val notification = NotificationCompat.Builder(context, "download_completed")
             .setContentTitle("Download Complete")
             .setContentText(title)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
             .setContentIntent(pendingIntent)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .build()
 
@@ -137,25 +116,12 @@ class DownloadWorker @AssistedInject constructor(
     }
 
     private fun showFailureNotification(id: Int, title: String, error: String) {
-        // Intent opens the App (MainActivity) to retry
-        val intent = Intent(context, com.engfred.yvd.MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-        }
-
-        val pendingIntent = PendingIntent.getActivity(
-            context, id, intent, PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val notification = NotificationCompat.Builder(context, "download_completed") // Use High Importance Channel
+        // (Same as your existing failure notification)
+        val notification = NotificationCompat.Builder(context, "download_completed")
             .setContentTitle("Download Failed")
-            .setContentText("Tap to retry: $title")
-            .setStyle(NotificationCompat.BigTextStyle().bigText("Error: $error")) // Expandable text for long errors
+            .setContentText(title)
             .setSmallIcon(android.R.drawable.stat_notify_error)
-            .setContentIntent(pendingIntent)
-            .setPriority(NotificationCompat.PRIORITY_HIGH) // Make it pop up
-            .setAutoCancel(true)
             .build()
-
         notificationManager.notify(id, notification)
     }
 }

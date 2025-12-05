@@ -7,5 +7,7 @@ import kotlinx.coroutines.flow.Flow
 
 interface YoutubeRepository {
     fun getVideoMetadata(url: String): Flow<Resource<VideoMetadata>>
-    fun downloadVideo(url: String, formatId: String, title: String): Flow<DownloadStatus>
+
+    // Added isAudio flag
+    fun downloadVideo(url: String, formatId: String, title: String, isAudio: Boolean): Flow<DownloadStatus>
 }

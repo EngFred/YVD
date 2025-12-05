@@ -5,7 +5,8 @@ data class VideoMetadata(
     val title: String,
     val thumbnailUrl: String,
     val duration: String,
-    val formats: List<VideoFormat>
+    val videoFormats: List<VideoFormat>,
+    val audioFormats: List<AudioFormat>
 )
 
 data class VideoFormat(
@@ -14,4 +15,11 @@ data class VideoFormat(
     val resolution: String,   // 1080p, 720p
     val fileSize: String,     // "12 MB"
     val fps: Int
+)
+
+data class AudioFormat(
+    val formatId: String,
+    val ext: String,          // m4a, webm
+    val bitrate: String,      // "128kbps"
+    val fileSize: String
 )
