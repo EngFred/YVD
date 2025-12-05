@@ -66,9 +66,8 @@ dependencies {
     implementation(libs.androidx.hilt.navigation.compose)
     ksp(libs.hilt.compiler)
 
-    // Coil (Images And video thumbnails)
+    // Coil (Images)
     implementation(libs.coil.compose)
-    implementation(libs.coil.video)
 
     // NewPipe & Networking
     implementation(libs.newpipe.extractor)

@@ -1,7 +1,5 @@
 package com.engfred.yvd.ui.downloads
 
-import android.media.MediaMetadataRetriever
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,7 +9,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Audiotrack
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Share
@@ -36,19 +33,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil.compose.AsyncImage
-import coil.decode.VideoFrameDecoder
-import coil.request.ImageRequest
 import com.engfred.yvd.domain.model.DownloadItem
 import com.engfred.yvd.ui.components.ConfirmationDialog
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import java.io.File
+import com.engfred.yvd.ui.components.FileThumbnail
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,7 +47,6 @@ fun DownloadsScreen(
 ) {
     val downloadItems by viewModel.files.collectAsState()
 
-    // State to track which item the user wants to delete
     var itemToDelete by remember { mutableStateOf<DownloadItem?>(null) }
 
     LaunchedEffect(Unit) {
@@ -73,9 +62,7 @@ fun DownloadsScreen(
                 itemToDelete?.let { viewModel.deleteFile(it) }
                 itemToDelete = null
             },
-            onDismiss = {
-                itemToDelete = null
-            }
+            onDismiss = { itemToDelete = null }
         )
     }
 
@@ -92,9 +79,12 @@ fun DownloadsScreen(
         }
     ) { padding ->
         if (downloadItems.isEmpty()) {
-            Box(modifier = Modifier
-                .fillMaxSize()
-                .padding(padding), contentAlignment = Alignment.Center) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
                 Text("No downloads yet")
             }
         } else {
@@ -108,7 +98,6 @@ fun DownloadsScreen(
                             Text("${item.file.extension.uppercase()} • ${item.sizeLabel}")
                         },
                         leadingContent = {
-                            // Custom Thumbnail Component
                             FileThumbnail(
                                 file = item.file,
                                 isAudio = item.isAudio,
@@ -125,94 +114,18 @@ fun DownloadsScreen(
                                 IconButton(onClick = { viewModel.shareFile(item) }) {
                                     Icon(Icons.Rounded.Share, contentDescription = "Share")
                                 }
-                                IconButton(onClick = {
-                                    itemToDelete = item
-                                }) {
-                                    Icon(Icons.Rounded.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
+                                IconButton(onClick = { itemToDelete = item }) {
+                                    Icon(
+                                        Icons.Rounded.Delete,
+                                        contentDescription = "Delete",
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
                                 }
                             }
                         }
                     )
                     HorizontalDivider()
                 }
-            }
-        }
-    }
-}
-
-/**
- * A smart thumbnail loader.
- * - If Video: Uses Coil's VideoFrameDecoder to load a frame from the File.
- * - If Audio: Uses MediaMetadataRetriever to extract embedded art. Fallback to Icon.
- */
-@Composable
-fun FileThumbnail(
-    file: File,
-    isAudio: Boolean,
-    modifier: Modifier = Modifier
-) {
-    val context = LocalContext.current
-
-    // State for Audio Album Art (ByteArray)
-    // For Video, we pass the file directly to Coil, so we don't need this state
-    var audioArtworkData by remember { mutableStateOf<ByteArray?>(null) }
-    var isAudioArtLoaded by remember { mutableStateOf(false) }
-
-    // If it's an audio file, extract metadata in the background
-    LaunchedEffect(file, isAudio) {
-        if (isAudio) {
-            withContext(Dispatchers.IO) {
-                try {
-                    val retriever = MediaMetadataRetriever()
-                    retriever.setDataSource(file.absolutePath)
-                    audioArtworkData = retriever.embeddedPicture
-                    retriever.release()
-                } catch (e: Exception) {
-                    audioArtworkData = null
-                }
-                isAudioArtLoaded = true
-            }
-        }
-    }
-
-    Box(
-        modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant),
-        contentAlignment = Alignment.Center
-    ) {
-        if (!isAudio) {
-            // --- VIDEO THUMBNAIL ---
-            AsyncImage(
-                model = ImageRequest.Builder(context)
-                    .data(file)
-                    // Important: Use VideoFrameDecoder for video files
-                    .decoderFactory(VideoFrameDecoder.Factory())
-                    .crossfade(true)
-                    .build(),
-                contentDescription = "Video Thumbnail",
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-        } else {
-            // --- AUDIO ARTWORK ---
-            if (isAudioArtLoaded && audioArtworkData != null) {
-                // If we successfully found album art
-                AsyncImage(
-                    model = ImageRequest.Builder(context)
-                        .data(audioArtworkData)
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = "Album Art",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                // Default fallback for Audio (or while loading)
-                Icon(
-                    imageVector = Icons.Rounded.Audiotrack,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(12.dp) // Add padding so icon isn't huge
-                )
             }
         }
     }

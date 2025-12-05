@@ -17,13 +17,12 @@ class DownloadsViewModel @Inject constructor(
     private val mediaHelper: MediaHelper
 ) : ViewModel() {
 
-    // Now holds DownloadItem instead of raw File
     private val _files = MutableStateFlow<List<DownloadItem>>(emptyList())
     val files = _files.asStateFlow()
 
     fun loadFiles() {
         viewModelScope.launch {
-            // This is now safe to call from Main, as the repo handles the thread switching
+            // This is safe to call from Main, as the repo handles the thread switching
             _files.value = repository.getDownloadedFiles()
         }
     }

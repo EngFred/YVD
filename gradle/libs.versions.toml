@@ -1,6 +1,7 @@
 [versions]
 # Existing
 agp = "8.13.1"
+coilCompose = "2.6.0"
 kotlin = "2.2.10"
 coreKtx = "1.17.0"
 junit = "4.13.2"
@@ -53,7 +54,6 @@ androidx-navigation-compose = { module = "androidx.navigation:navigation-compose
 
 # Image Loading (Coil)
 coil-compose = { module = "io.coil-kt:coil-compose", version.ref = "coil" }
-coil-video = { module = "io.coil-kt:coil-video", version.ref = "coil" }
 
 # Downloader Core (NewPipe + OkHttp)
 newpipe-extractor = { module = "com.github.TeamNewPipe:NewPipeExtractor", version.ref = "newpipeExtractor" }

@@ -2,8 +2,14 @@ package com.engfred.yvd.util
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.media.MediaMetadataRetriever
+import android.media.ThumbnailUtils
+import android.provider.MediaStore
 import androidx.core.content.FileProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -63,6 +69,46 @@ class MediaHelper @Inject constructor(
             context.startActivity(chooser)
         } catch (e: Exception) {
             throw Exception("Could not share file: ${e.message}")
+        }
+    }
+
+    companion object {
+        /**
+         * Extracts album art from an audio file.
+         * Returns ByteArray (which Coil can load directly).
+         */
+        suspend fun getAudioArtwork(file: File): ByteArray? = withContext(Dispatchers.IO) {
+            val retriever = MediaMetadataRetriever()
+            return@withContext try {
+                retriever.setDataSource(file.absolutePath)
+                retriever.embeddedPicture
+            } catch (e: Exception) {
+                e.printStackTrace()
+                null
+            } finally {
+                try {
+                    retriever.release()
+                } catch (e: Exception) {
+                    // Ignore release errors
+                }
+            }
+        }
+
+        /**
+         * Extracts a thumbnail from a video file.
+         * Returns a Bitmap.
+         */
+        suspend fun getVideoThumbnail(file: File): Bitmap? = withContext(Dispatchers.IO) {
+            return@withContext try {
+                // MINI_KIND corresponds to 512 x 384
+                ThumbnailUtils.createVideoThumbnail(
+                    file.absolutePath,
+                    MediaStore.Video.Thumbnails.MINI_KIND
+                )
+            } catch (e: Exception) {
+                e.printStackTrace()
+                null
+            }
         }
     }
 }
