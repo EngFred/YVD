@@ -4,15 +4,19 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.*
 import com.engfred.yvd.common.Resource
+import com.engfred.yvd.domain.model.AppTheme
 import com.engfred.yvd.domain.model.VideoMetadata
+import com.engfred.yvd.domain.repository.ThemeRepository
 import com.engfred.yvd.domain.repository.YoutubeRepository
 import com.engfred.yvd.util.MediaHelper
 import com.engfred.yvd.worker.DownloadWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.UUID
@@ -34,14 +38,29 @@ data class HomeState(
 class HomeViewModel @Inject constructor(
     private val repository: YoutubeRepository,
     private val mediaHelper: MediaHelper,
+    private val themeRepository: ThemeRepository,
     private val workManager: WorkManager
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(HomeState())
     val state = _state.asStateFlow()
 
+    // Expose Theme for the UI Dialog to know current selection
+    val currentTheme = themeRepository.theme.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = AppTheme.SYSTEM
+    )
+
     // Track current worker ID to enable cancellation
     private var currentWorkId: UUID? = null
+
+    // Function to change theme
+    fun updateTheme(newTheme: AppTheme) {
+        viewModelScope.launch {
+            themeRepository.setTheme(newTheme)
+        }
+    }
 
     fun onUrlChanged() {
         _state.value = _state.value.copy(

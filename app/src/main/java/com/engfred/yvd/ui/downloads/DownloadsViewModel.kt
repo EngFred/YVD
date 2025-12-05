@@ -3,12 +3,12 @@ package com.engfred.yvd.ui.downloads
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.engfred.yvd.data.repository.DownloadsRepository
+import com.engfred.yvd.domain.model.DownloadItem
 import com.engfred.yvd.util.MediaHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.io.File
 import javax.inject.Inject
 
 @HiltViewModel
@@ -17,35 +17,37 @@ class DownloadsViewModel @Inject constructor(
     private val mediaHelper: MediaHelper
 ) : ViewModel() {
 
-    private val _files = MutableStateFlow<List<File>>(emptyList())
+    // Now holds DownloadItem instead of raw File
+    private val _files = MutableStateFlow<List<DownloadItem>>(emptyList())
     val files = _files.asStateFlow()
 
     fun loadFiles() {
         viewModelScope.launch {
+            // This is now safe to call from Main, as the repo handles the thread switching
             _files.value = repository.getDownloadedFiles()
         }
     }
 
-    fun playFile(file: File) {
+    fun playFile(item: DownloadItem) {
         try {
-            mediaHelper.openMediaFile(file)
+            mediaHelper.openMediaFile(item.file)
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
 
-    fun shareFile(file: File) {
+    fun shareFile(item: DownloadItem) {
         try {
-            mediaHelper.shareMediaFile(file)
+            mediaHelper.shareMediaFile(item.file)
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
 
-    fun deleteFile(file: File) {
-        if(file.exists()) {
-            file.delete()
-            loadFiles() // Refresh list
+    fun deleteFile(item: DownloadItem) {
+        if(item.file.exists()) {
+            item.file.delete()
+            loadFiles() // Refresh list to update UI
         }
     }
 }

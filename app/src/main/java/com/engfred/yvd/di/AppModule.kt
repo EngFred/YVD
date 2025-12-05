@@ -2,7 +2,9 @@ package com.engfred.yvd.di
 
 import android.content.Context
 import androidx.work.WorkManager
+import com.engfred.yvd.data.repository.ThemeRepositoryImpl
 import com.engfred.yvd.data.repository.YoutubeRepositoryImpl
+import com.engfred.yvd.domain.repository.ThemeRepository
 import com.engfred.yvd.domain.repository.YoutubeRepository
 import dagger.Module
 import dagger.Provides
@@ -29,5 +31,13 @@ object AppModule {
         @ApplicationContext context: Context
     ): WorkManager {
         return WorkManager.getInstance(context)
+    }
+
+    @Provides
+    @Singleton
+    fun provideThemeRepository(
+        @ApplicationContext context: Context
+    ): ThemeRepository {
+        return ThemeRepositoryImpl(context)
     }
 }

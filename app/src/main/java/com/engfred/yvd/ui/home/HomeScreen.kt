@@ -13,6 +13,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ContentPaste
+import androidx.compose.material.icons.rounded.SettingsBrightness
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -23,18 +24,20 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
 import com.engfred.yvd.ui.components.ConfirmationDialog
 import com.engfred.yvd.ui.components.DownloadProgressCard
 import com.engfred.yvd.ui.components.FormatSelectionSheet
+import com.engfred.yvd.ui.components.ThemeSelectionDialog
 import com.engfred.yvd.ui.components.VideoCard
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    viewModel: HomeViewModel = hiltViewModel()
+    viewModel: HomeViewModel = androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
+    val currentTheme by viewModel.currentTheme.collectAsState()
+
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -44,6 +47,7 @@ fun HomeScreen(
 
     var showFormatDialog by rememberSaveable { mutableStateOf(false) }
     var showCancelDialog by rememberSaveable { mutableStateOf(false) }
+    var showThemeDialog by rememberSaveable { mutableStateOf(false) }
 
     // Permission Launcher
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -80,16 +84,38 @@ fun HomeScreen(
         )
     }
 
+    // Theme Dialog
+    if (showThemeDialog) {
+        ThemeSelectionDialog(
+            currentTheme = currentTheme,
+            onThemeSelected = { theme ->
+                viewModel.updateTheme(theme)
+                showThemeDialog = false
+            },
+            onDismiss = { showThemeDialog = false }
+        )
+    }
+
     Scaffold(
         // Prevent inner scaffold from doubling up system window insets, relying on padding instead
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            CenterAlignedTopAppBar(
+            TopAppBar(
                 title = { Text("YV Downloader") },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = Color.White
-                )
+                    titleContentColor = Color.White,
+                    actionIconContentColor = Color.White
+                ),
+                actions = {
+                    IconButton(onClick = { showThemeDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Rounded.SettingsBrightness,
+                            contentDescription = "Change Theme",
+                            modifier = Modifier.size(64.dp)
+                        )
+                    }
+                }
             )
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
@@ -97,10 +123,10 @@ fun HomeScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding) // Pushes content below TopBar
-                .consumeWindowInsets(padding) // Good practice when nesting scaffolds
+                .padding(padding)
+                .consumeWindowInsets(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp), // Horizontal padding only
+                .padding(horizontal = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(modifier = Modifier.height(16.dp))
@@ -181,8 +207,6 @@ fun HomeScreen(
                 )
             }
 
-            // Adding a spacer at the bottom of the scrollable column.
-            // This ensures content clears the navigation bar or system gestures in landscape
             Spacer(modifier = Modifier.height(80.dp))
             Spacer(modifier = Modifier.windowInsetsBottomHeight(WindowInsets.safeDrawing))
         }
