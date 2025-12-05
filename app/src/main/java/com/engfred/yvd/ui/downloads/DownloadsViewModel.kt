@@ -11,19 +11,26 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+// UI State to manage data and loading status
+data class DownloadsUiState(
+    val files: List<DownloadItem> = emptyList()
+)
+
 @HiltViewModel
 class DownloadsViewModel @Inject constructor(
     private val repository: DownloadsRepository,
     private val mediaHelper: MediaHelper
 ) : ViewModel() {
 
-    private val _files = MutableStateFlow<List<DownloadItem>>(emptyList())
-    val files = _files.asStateFlow()
+    private val _uiState = MutableStateFlow(DownloadsUiState())
+    val uiState = _uiState.asStateFlow()
 
     fun loadFiles() {
         viewModelScope.launch {
-            // This is safe to call from Main, as the repo handles the thread switching
-            _files.value = repository.getDownloadedFiles()
+            val files = repository.getDownloadedFiles()
+            _uiState.value = DownloadsUiState(
+                files = files
+            )
         }
     }
 
@@ -43,10 +50,29 @@ class DownloadsViewModel @Inject constructor(
         }
     }
 
+    // Handles single file deletion
     fun deleteFile(item: DownloadItem) {
         if(item.file.exists()) {
             item.file.delete()
-            loadFiles() // Refresh list to update UI
+            loadFiles() // Refresh list
         }
+    }
+
+    // Handles batch deletion
+    fun deleteFiles(items: List<DownloadItem>) {
+        viewModelScope.launch {
+            items.forEach { item ->
+                if(item.file.exists()) {
+                    item.file.delete()
+                }
+            }
+            loadFiles()
+        }
+    }
+
+    // Handles "Delete All"
+    fun deleteAllFiles() {
+        val currentList = _uiState.value.files
+        deleteFiles(currentList)
     }
 }
