@@ -131,7 +131,6 @@ fun HomeScreen(
                 containerColor = Color(0xFFFF0000),
                 contentColor = Color.White
             ) {
-                // Using SmartDisplay as it resembles a video screen.
                 Icon(
                     imageVector = Icons.Rounded.SmartDisplay,
                     modifier = Modifier.size(34.dp),
@@ -204,7 +203,7 @@ fun HomeScreen(
 
 
             if (
-                state.videoMetadata == null && !state.isDownloading && !state.downloadComplete
+                state.videoMetadata == null && !state.isDownloading && !state.downloadComplete && !state.isLoading
             ){
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
