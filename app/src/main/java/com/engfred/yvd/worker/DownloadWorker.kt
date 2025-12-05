@@ -21,6 +21,14 @@ import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.collectLatest
 import java.io.File
 
+/**
+ * Background Worker executed by WorkManager.
+ *
+ * Responsibilities:
+ * 1. Executes the long-running download task even if the user closes the app.
+ * 2. Manages Foreground Service notifications (Progress bars).
+ * 3. Triggers the MediaScanner so downloaded files appear in Gallery/Music apps.
+ */
 @HiltWorker
 class DownloadWorker @AssistedInject constructor(
     @Assisted private val context: Context,
@@ -42,7 +50,7 @@ class DownloadWorker @AssistedInject constructor(
         val typeLabel = if (isAudio) "Audio" else "Video"
 
         try {
-            // Initial Notification
+            // Promote to Foreground Service immediately to prevent system kill
             setForeground(createForegroundInfo(notificationId, title, 0, true, typeLabel))
 
             var resultFile: File? = null
@@ -50,7 +58,7 @@ class DownloadWorker @AssistedInject constructor(
             repository.downloadVideo(url, formatId, title, isAudio).collectLatest { status ->
                 when (status) {
                     is DownloadStatus.Progress -> {
-                        // FIX 1: Send Progress to ViewModel
+                        // Pass progress back to UI via WorkManager Data
                         setProgress(
                             workDataOf(
                                 "progress" to status.progress,
@@ -58,7 +66,7 @@ class DownloadWorker @AssistedInject constructor(
                             )
                         )
 
-                        // Update Notification
+                        // Update Notification UI
                         if (status.progress > 0) {
                             setForeground(createForegroundInfo(notificationId, title, status.progress.toInt(), false, typeLabel))
                         }
@@ -68,15 +76,14 @@ class DownloadWorker @AssistedInject constructor(
                 }
             }
 
+            // Validation and Media Scan
             return if (resultFile != null && resultFile!!.exists()) {
-                // FIX 2: Trigger Media Scanner so Gallery/Music apps see the file
+                // Scan file so it shows up in Android Gallery / Music Players
                 MediaScannerConnection.scanFile(
                     context,
                     arrayOf(resultFile!!.absolutePath),
-                    null // MimeType null lets Android detect it automatically
-                ) { _, uri ->
-                    // Log.d("MediaScanner", "Scanned $path:")
-                }
+                    null
+                ) { _, _ -> }
 
                 showCompletionNotification(notificationId + 1, title, resultFile!!, isAudio)
                 Result.success(workDataOf("filePath" to resultFile!!.absolutePath))
@@ -90,8 +97,11 @@ class DownloadWorker @AssistedInject constructor(
         }
     }
 
+    /**
+     * Creates the notification required for Foreground Services.
+     * Note: Android 14+ requires `ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC`.
+     */
     private fun createForegroundInfo(id: Int, title: String, progress: Int, indeterminate: Boolean, typeLabel: String): ForegroundInfo {
-        // Create an Intent to launch the app when notification is clicked
         val intent = Intent(context, com.engfred.yvd.MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
@@ -103,11 +113,10 @@ class DownloadWorker @AssistedInject constructor(
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
-            .setOnlyAlertOnce(true) // Prevents sound/vibration on every progress update
+            .setOnlyAlertOnce(true)
             .setProgress(100, progress, indeterminate)
             .build()
 
-        // Android 14 (API 34) requires specifying foreground service type
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             return ForegroundInfo(id, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         }
@@ -141,7 +150,7 @@ class DownloadWorker @AssistedInject constructor(
     private fun showFailureNotification(id: Int, title: String, error: String) {
         val notification = NotificationCompat.Builder(context, "download_completed")
             .setContentTitle("Download Failed")
-            .setContentText("Error: $error") // Show error detail
+            .setContentText("Error: $error")
             .setSmallIcon(android.R.drawable.stat_notify_error)
             .setStyle(NotificationCompat.BigTextStyle().bigText("Error: $error"))
             .build()

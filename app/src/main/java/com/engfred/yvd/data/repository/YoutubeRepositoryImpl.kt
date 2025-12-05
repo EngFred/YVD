@@ -41,6 +41,14 @@ import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 
+/**
+ * Implementation of [YoutubeRepository] that handles metadata extraction and file downloading.
+ *
+ * Features:
+ * - Uses [NewPipe] extractor for parsing YouTube pages.
+ * - Implements **Multi-threaded Chunked Downloading** for high speed.
+ * - Handles **Muxing** (merging video + audio streams) for high-quality formats (1080p+).
+ */
 class YoutubeRepositoryImpl @Inject constructor(
     private val context: Context
 ) : YoutubeRepository {
@@ -55,6 +63,10 @@ class YoutubeRepositoryImpl @Inject constructor(
 
     private val downloadClient: OkHttpClient = downloaderImpl.getOkHttpClient()
 
+    /**
+     * Fetches metadata for a given YouTube URL.
+     * Parses available streams, calculates file sizes, and extracts high-res thumbnails.
+     */
     override fun getVideoMetadata(url: String): Flow<Resource<VideoMetadata>> = flow {
         Log.d(TAG, "Fetching metadata for: $url")
         emit(Resource.Loading())
@@ -62,8 +74,15 @@ class YoutubeRepositoryImpl @Inject constructor(
             val extractor = ServiceList.YouTube.getStreamExtractor(url) as YoutubeStreamExtractor
             extractor.fetchPage()
 
+            // NewPipe returns a list of thumbnails. We sort by width to ensure we get the highest resolution (HD/MaxRes).
+            val bestThumbnail = extractor.thumbnails
+                .maxByOrNull { it.width }?.url
+                ?: extractor.thumbnails.firstOrNull()?.url
+                ?: ""
+
             val allVideoStreams = extractor.videoStreams + extractor.videoOnlyStreams
 
+            // Sort videos: First by Resolution (desc), then by FPS (desc)
             val sortedVideoFormats = allVideoStreams
                 .filter { it.format?.suffix == "mp4" }
                 .sortedWith(
@@ -76,6 +95,7 @@ class YoutubeRepositoryImpl @Inject constructor(
 
             val durationSeconds = extractor.length
 
+            // Map streams to Domain Models
             val videoFormats = sortedVideoFormats.map { stream ->
                 VideoFormat(
                     formatId = stream.itag.toString(),
@@ -103,7 +123,7 @@ class YoutubeRepositoryImpl @Inject constructor(
             val metadata = VideoMetadata(
                 id = extractor.url,
                 title = extractor.name,
-                thumbnailUrl = extractor.thumbnails.firstOrNull()?.url ?: "",
+                thumbnailUrl = bestThumbnail,
                 duration = extractor.length.toString(),
                 videoFormats = videoFormats,
                 audioFormats = audioFormats
@@ -116,6 +136,12 @@ class YoutubeRepositoryImpl @Inject constructor(
         }
     }.flowOn(Dispatchers.IO)
 
+    /**
+     * Orchestrates the download process.
+     * 1. If Audio only: Downloads directly.
+     * 2. If Standard Video (Video+Audio combined): Downloads directly.
+     * 3. If Adaptive Video (Video only): Downloads Video + Audio separately, then Muxes them.
+     */
     override fun downloadVideo(
         url: String,
         formatId: String,
@@ -136,7 +162,7 @@ class YoutubeRepositoryImpl @Inject constructor(
             val cleanTitle = title.replace("[^a-zA-Z0-9.-]".toRegex(), "_").take(50)
 
             if (isAudio) {
-                // AUDIO LOGIC
+                // --- AUDIO DOWNLOAD STRATEGY ---
                 val targetStream = extractor.audioStreams.find { it.itag.toString() == formatId }
                     ?: throw Exception("Audio stream not found")
 
@@ -148,7 +174,7 @@ class YoutubeRepositoryImpl @Inject constructor(
                 trySend(DownloadStatus.Success(outputFile))
 
             } else {
-                // VIDEO LOGIC
+                // --- VIDEO DOWNLOAD STRATEGY ---
                 val allVideoStreams = extractor.videoStreams + extractor.videoOnlyStreams
                 val targetStream = allVideoStreams.find { it.itag.toString() == formatId }
                     ?: throw Exception("Video stream not found")
@@ -158,17 +184,19 @@ class YoutubeRepositoryImpl @Inject constructor(
                 val outputFile = File(appDir, fileName)
 
                 if (!targetStream.isVideoOnly) {
+                    // Case A: Pre-merged file exists (usually 360p)
                     Log.d(TAG, "Downloading Standard Video to ${outputFile.name}")
                     downloadStreamParallel(targetStream, outputFile, this@callbackFlow, "Downloading Video...")
                     trySend(DownloadStatus.Success(outputFile))
                 } else {
-                    // MUXING LOGIC
+                    // Case B: High Quality (1080p+) requires downloading separate tracks and merging
                     Log.d(TAG, "Downloading Video-Only Stream (Muxing required)")
                     val videoTemp = File(appDir, "temp_v_${System.currentTimeMillis()}.$videoExt")
 
                     try {
                         downloadStreamParallel(targetStream, videoTemp, this@callbackFlow, "Downloading Video Track...")
 
+                        // Find best matching audio
                         val targetAudioSuffix = if (videoExt == "mp4") "m4a" else "webm"
                         val bestAudio = extractor.audioStreams
                             .filter { it.format?.suffix == targetAudioSuffix }
@@ -189,10 +217,10 @@ class YoutubeRepositoryImpl @Inject constructor(
                             Log.d(TAG, "Muxing complete")
                             trySend(DownloadStatus.Success(outputFile))
                         } finally {
-                            audioTemp.delete()
+                            audioTemp.delete() // Clean up audio temp
                         }
                     } finally {
-                        videoTemp.delete()
+                        videoTemp.delete() // Clean up video temp
                     }
                 }
             }
@@ -206,11 +234,25 @@ class YoutubeRepositoryImpl @Inject constructor(
         awaitClose { }
     }.flowOn(Dispatchers.IO)
 
+    /**
+     * Helper to estimate file size based on bitrate and duration.
+     * This is an estimation; actual Content-Length headers are authoritative.
+     */
     private fun calculateFileSize(bitrate: Long, duration: Long): String {
         val bytes = if (bitrate > 0 && duration > 0) (bitrate * duration) / 8 else -1L
         return if (bytes > 0) "%.1f MB".format(bytes.toDouble() / (1024 * 1024)) else "Unknown"
     }
 
+    /**
+     * **Parallel Download Engine**
+     *
+     * Divides the file into 4 parts and downloads them simultaneously using Coroutines.
+     * This bypasses server-side throttling on single connections.
+     *
+     * @param stream The NewPipe stream info containing the URL.
+     * @param file The destination local file.
+     * @param threshold Bytes threshold. Files smaller than 1MB use single-threading.
+     */
     private suspend fun downloadStreamParallel(
         stream: Stream,
         file: File,
@@ -220,7 +262,7 @@ class YoutubeRepositoryImpl @Inject constructor(
 
         var totalLength = -1L
 
-        // Retry loop for getting file size
+        // Attempt to fetch Content-Length (File Size) with retries
         for (i in 0..2) {
             try {
                 val headRequest = Request.Builder().url(stream.content).head().build()
@@ -235,10 +277,10 @@ class YoutubeRepositoryImpl @Inject constructor(
 
         Log.d(TAG, "Starting download for ${file.name}. Size: $totalLength bytes")
 
-        // FIX: Lowered Threshold to 1MB (1024 * 1024).
-        // This ensures audio files (approx 3MB-5MB) utilize multi-threading.
+        // If file is < 1MB, overhead of threads isn't worth it. Using single thread.
+        // Otherwise, use 4 threads to maximize bandwidth.
         if (totalLength < 1 * 1024 * 1024) {
-            Log.d(TAG, "File extremely small (<1MB) or unknown size. Using Single Thread.")
+            Log.d(TAG, "File small (<1MB) or unknown size. Using Single Thread.")
             downloadStreamSingle(stream.content, file, totalLength, flow, statusPrefix)
             return@withContext
         }
@@ -247,6 +289,7 @@ class YoutubeRepositoryImpl @Inject constructor(
         val partSize = totalLength / threadCount
         val downloadedBytes = AtomicLong(0)
 
+        // Pre-allocate file size
         val raf = RandomAccessFile(file, "rw")
         raf.setLength(totalLength)
         raf.close()
@@ -258,9 +301,10 @@ class YoutubeRepositoryImpl @Inject constructor(
                 val jobs = (0 until threadCount).map { index ->
                     async(Dispatchers.IO) {
                         val start = index * partSize
+                        // Last chunk must go to the very end of the file
                         val end = if (index == threadCount - 1) totalLength - 1 else (start + partSize - 1)
 
-                        // Added Retry Logic inside
+                        // Execute chunk download with retry capability
                         retryOperation(3) {
                             downloadChunk(
                                 url = stream.content,
@@ -284,7 +328,9 @@ class YoutubeRepositoryImpl @Inject constructor(
         }
     }
 
-    // Helper to retry network operations
+    /**
+     * retries a suspend block a specified number of times before failing.
+     */
     private suspend fun retryOperation(times: Int, block: () -> Unit) {
         var currentAttempt = 0
         while (true) {
@@ -295,11 +341,15 @@ class YoutubeRepositoryImpl @Inject constructor(
                 currentAttempt++
                 if (currentAttempt >= times) throw e
                 Log.w("YVD_REPO", "Retrying chunk... ($currentAttempt/$times)")
-                delay(1000) // Wait 1 second before retry
+                delay(1000) // Backoff wait
             }
         }
     }
 
+    /**
+     * Downloads a specific byte range of a file.
+     * Uses `RandomAccessFile` to write to the specific offset in the file safely.
+     */
     private fun downloadChunk(
         url: String,
         file: File,
@@ -310,13 +360,14 @@ class YoutubeRepositoryImpl @Inject constructor(
         flow: ProducerScope<DownloadStatus>,
         statusPrefix: String
     ) {
+        // "Range" header tells the server we only want these specific bytes
         val request = Request.Builder()
             .url(url)
             .header("Range", "bytes=$start-$end")
             .build()
 
         val raf = RandomAccessFile(file, "rw")
-        raf.seek(start)
+        raf.seek(start) // Jump to the correct position in the file
 
         try {
             val response = downloadClient.newCall(request).execute()
@@ -324,13 +375,14 @@ class YoutubeRepositoryImpl @Inject constructor(
 
             val body = response.body ?: throw IOException("Empty body")
             val inputStream = body.byteStream()
-            val buffer = ByteArray(64 * 1024)
+            val buffer = ByteArray(64 * 1024) // 64KB buffer for optimal I/O
             var bytesRead: Int
 
             while (inputStream.read(buffer).also { bytesRead = it } != -1) {
                 raf.write(buffer, 0, bytesRead)
                 val currentTotal = atomicProgress.addAndGet(bytesRead.toLong())
 
+                // Update UI Progress (Throttled to prevent flooding)
                 if (totalFileLength > 0) {
                     val progress = ((currentTotal.toFloat() / totalFileLength.toFloat()) * 100).toInt()
                     if (currentTotal % (512 * 1024) < 65536) {
@@ -344,6 +396,9 @@ class YoutubeRepositoryImpl @Inject constructor(
         }
     }
 
+    /**
+     * Fallback method for small files or servers that don't support Range headers.
+     */
     private fun downloadStreamSingle(
         url: String,
         file: File,
@@ -383,18 +438,24 @@ class YoutubeRepositoryImpl @Inject constructor(
         }
     }
 
+    /**
+     * Merges (Muxes) a video file and an audio file into a single output file.
+     * Uses Android's native [MediaMuxer] and [MediaExtractor].
+     */
     private fun muxAudioVideo(audioPath: String, videoPath: String, outPath: String, format: Int) {
         val videoExtractor = MediaExtractor()
         val audioExtractor = MediaExtractor()
         val muxer = MediaMuxer(outPath, format)
 
         try {
+            // Setup Video Track
             videoExtractor.setDataSource(videoPath)
             val videoTrackIndex = findTrackIndex(videoExtractor, "video/")
             videoExtractor.selectTrack(videoTrackIndex)
             val videoFormat = videoExtractor.getTrackFormat(videoTrackIndex)
             val muxerVideoTrackIndex = muxer.addTrack(videoFormat)
 
+            // Setup Audio Track
             audioExtractor.setDataSource(audioPath)
             val audioTrackIndex = findTrackIndex(audioExtractor, "audio/")
             audioExtractor.selectTrack(audioTrackIndex)
@@ -403,7 +464,7 @@ class YoutubeRepositoryImpl @Inject constructor(
 
             muxer.start()
 
-            val buffer = ByteBuffer.allocate(2 * 1024 * 1024)
+            val buffer = ByteBuffer.allocate(2 * 1024 * 1024) // 2MB Muxing Buffer
             val bufferInfo = MediaCodec.BufferInfo()
 
             Log.d(TAG, "Muxing Video Track...")
@@ -414,7 +475,7 @@ class YoutubeRepositoryImpl @Inject constructor(
 
         } catch (e: Exception) {
             Log.e(TAG, "Muxing failed: ${e.message}")
-            File(outPath).delete()
+            File(outPath).delete() // Clean up corrupt output
             throw e
         } finally {
             try { muxer.stop(); muxer.release() } catch (e: Exception) {}
