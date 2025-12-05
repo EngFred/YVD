@@ -4,8 +4,9 @@ import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.layout.consumeWindowInsets
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.DownloadForOffline
 import androidx.compose.material.icons.rounded.Home
@@ -27,61 +28,11 @@ import com.engfred.yvd.ui.home.HomeScreen
 fun MainScreen() {
     val navController = rememberNavController()
 
-    Scaffold(
-        bottomBar = {
-            NavigationBar(
-                containerColor = MaterialTheme.colorScheme.primary,
-            ) {
-                val navBackStackEntry by navController.currentBackStackEntryAsState()
-                val currentDestination = navBackStackEntry?.destination
-
-                val navItemColors = NavigationBarItemDefaults.colors(
-                    indicatorColor = Color.White,
-                    selectedIconColor = MaterialTheme.colorScheme.primary,
-                    selectedTextColor = Color.White,
-                    unselectedIconColor = Color.White.copy(alpha = 0.6f),
-                    unselectedTextColor = Color.White.copy(alpha = 0.6f)
-                )
-
-                NavigationBarItem(
-                    icon = { Icon(Icons.Rounded.Home, contentDescription = null) },
-                    label = { Text("Home") },
-                    selected = currentDestination?.hierarchy?.any { it.route == "home" } == true,
-                    colors = navItemColors,
-                    onClick = {
-                        navController.navigate("home") {
-                            popUpTo(navController.graph.findStartDestination().id) {
-                                saveState = true
-                            }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    }
-                )
-                NavigationBarItem(
-                    icon = { Icon(Icons.Rounded.DownloadForOffline, contentDescription = null) },
-                    label = { Text("Downloads") },
-                    selected = currentDestination?.hierarchy?.any { it.route == "downloads" } == true,
-                    colors = navItemColors,
-                    onClick = {
-                        navController.navigate("downloads") {
-                            popUpTo(navController.graph.findStartDestination().id) {
-                                saveState = true
-                            }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    }
-                )
-            }
-        }
-    ) { innerPadding ->
+    Column{
         NavHost(
             navController = navController,
             startDestination = "home",
-            modifier = Modifier
-                .padding(innerPadding)
-                .consumeWindowInsets(innerPadding)
+            modifier = Modifier.weight(1f)
         ) {
             composable(
                 route = "home",
@@ -106,6 +57,52 @@ fun MainScreen() {
             ) {
                 DownloadsScreen()
             }
+        }
+
+        NavigationBar(
+            containerColor = MaterialTheme.colorScheme.primary,
+        ) {
+            val navBackStackEntry by navController.currentBackStackEntryAsState()
+            val currentDestination = navBackStackEntry?.destination
+
+            val navItemColors = NavigationBarItemDefaults.colors(
+                indicatorColor = Color.White,
+                selectedIconColor = MaterialTheme.colorScheme.primary,
+                selectedTextColor = Color.White,
+                unselectedIconColor = Color.White.copy(alpha = 0.6f),
+                unselectedTextColor = Color.White.copy(alpha = 0.6f)
+            )
+
+            NavigationBarItem(
+                icon = { Icon(Icons.Rounded.Home, contentDescription = null) },
+                label = { Text("Home") },
+                selected = currentDestination?.hierarchy?.any { it.route == "home" } == true,
+                colors = navItemColors,
+                onClick = {
+                    navController.navigate("home") {
+                        popUpTo(navController.graph.findStartDestination().id) {
+                            saveState = true
+                        }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
+            )
+            NavigationBarItem(
+                icon = { Icon(Icons.Rounded.DownloadForOffline, contentDescription = null) },
+                label = { Text("Downloads") },
+                selected = currentDestination?.hierarchy?.any { it.route == "downloads" } == true,
+                colors = navItemColors,
+                onClick = {
+                    navController.navigate("downloads") {
+                        popUpTo(navController.graph.findStartDestination().id) {
+                            saveState = true
+                        }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
+            )
         }
     }
 }

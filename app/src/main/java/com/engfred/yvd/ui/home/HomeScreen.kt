@@ -5,6 +5,7 @@ import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -96,11 +97,19 @@ fun HomeScreen(
         )
     }
 
-    Scaffold(
-        topBar = {
+    // Root Container replacing Scaffold
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        // Main Content Layer (TopBar + Scrollable Content)
+        Column(
+            modifier = Modifier.fillMaxSize()
+        ) {
             TopAppBar(
                 title = { Text("YV Downloader") },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     titleContentColor = Color.White,
                     actionIconContentColor = Color.White
@@ -115,143 +124,157 @@ fun HomeScreen(
                     }
                 }
             )
-        },
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { openYoutube(context) },
-                containerColor = Color(0xFFFF0000),
-                contentColor = Color.White
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.SmartDisplay,
-                    modifier = Modifier.size(34.dp),
-                    contentDescription = "Open YouTube"
-                )
-            }
-        },
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Spacer(modifier = Modifier.height(16.dp))
 
-            // URL Input Field
-            OutlinedTextField(
-                value = urlText,
-                onValueChange = {
-                    urlText = it
-                    viewModel.onUrlChanged()
-                },
-                label = { Text("Paste YouTube Link") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                trailingIcon = {
-                    IconButton(onClick = {
-                        if (clipboardManager.hasText()) {
-                            clipboardManager.getText()?.let { clipData ->
-                                val pastedText = clipData.text.toString()
-                                urlText = pastedText
-                                keyboardController?.hide()
-                                viewModel.loadVideoInfo(pastedText)
+            // Scrollable Content
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f) // Takes up remaining space below TopBar
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // URL Input Field
+                OutlinedTextField(
+                    value = urlText,
+                    onValueChange = {
+                        urlText = it
+                        viewModel.onUrlChanged()
+                    },
+                    label = { Text("Paste YouTube Link") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    trailingIcon = {
+                        IconButton(onClick = {
+                            if (clipboardManager.hasText()) {
+                                clipboardManager.getText()?.let { clipData ->
+                                    val pastedText = clipData.text.toString()
+                                    urlText = pastedText
+                                    keyboardController?.hide()
+                                    viewModel.loadVideoInfo(pastedText)
+                                }
+                            }
+                        }) {
+                            Icon(Icons.Rounded.ContentPaste, contentDescription = "Paste")
+                        }
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Get Info Button
+                if (state.videoMetadata == null && !state.isDownloading && !state.downloadComplete) {
+                    Button(
+                        onClick = {
+                            keyboardController?.hide()
+                            viewModel.loadVideoInfo(urlText)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(contentColor = Color.White),
+                        enabled = !state.isLoading
+                    ) {
+                        if (state.isLoading) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
+                        } else {
+                            Text("Get Video Info", color = Color.White)
+                        }
+                    }
+                }
+
+                // Instructions / Empty State
+                if (state.videoMetadata == null && !state.isDownloading && !state.downloadComplete && !state.isLoading) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 32.dp)
+                            .background(Color.Transparent)
+                            .padding(start = 24.dp, end = 24.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
+                                .padding(24.dp)
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    imageVector = Icons.Rounded.ContentPaste,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(48.dp),
+                                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    text = "How to Download",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "1. Tap the YouTube button to find a video\n2. Copy the video link\n3. Paste it above to start",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    textAlign = TextAlign.Center,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
-                    }) {
-                        Icon(Icons.Rounded.ContentPaste, contentDescription = "Paste")
                     }
                 }
-            )
 
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Get Info Button
-            if (
-                state.videoMetadata == null && !state.isDownloading && !state.downloadComplete
-            ) {
-                Button(
-                    onClick = {
-                        keyboardController?.hide()
-                        viewModel.loadVideoInfo(urlText)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(contentColor = Color.White),
-                    enabled = !state.isLoading
-                ) {
-                    if (state.isLoading) {
-                        CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
-                    } else {
-                        Text("Get Video Info", color = Color.White)
-                    }
-                }
-            }
-
-
-            if (
-                state.videoMetadata == null && !state.isDownloading && !state.downloadComplete && !state.isLoading
-            ){
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(400.dp)
-                        .padding(start = 24.dp, end = 24.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.ContentPaste,
-                        contentDescription = null,
-                        modifier = Modifier.size(48.dp),
-                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-                    )
+                // Video Metadata Card
+                state.videoMetadata?.let { metadata ->
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "How to Download",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "1. Tap the YouTube button to find a video\n2. Copy the video link\n3. Paste it above to start",
-                        style = MaterialTheme.typography.bodyMedium,
-                        textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    VideoCard(
+                        metadata = metadata,
+                        isDownloading = state.isDownloading,
+                        onDownloadClick = { showFormatDialog = true }
                     )
                 }
-            }
 
-            // Video Metadata Card
-            state.videoMetadata?.let { metadata ->
-                Spacer(modifier = Modifier.height(16.dp))
-                VideoCard(
-                    metadata = metadata,
-                    isDownloading = state.isDownloading,
-                    onDownloadClick = { showFormatDialog = true }
-                )
-            }
+                // Download Progress
+                if (state.isDownloading || state.downloadComplete) {
+                    Spacer(modifier = Modifier.height(24.dp))
+                    DownloadProgressCard(
+                        statusText = state.downloadStatusText,
+                        progress = state.downloadProgress,
+                        isDownloading = state.isDownloading,
+                        isComplete = state.downloadComplete,
+                        isAudio = state.isAudio,
+                        onCancel = { showCancelDialog = true },
+                        onPlay = { viewModel.openMediaFile() },
+                        onShare = { viewModel.shareMediaFile() }
+                    )
+                }
 
-            // Download Progress
-            if (state.isDownloading || state.downloadComplete) {
-                Spacer(modifier = Modifier.height(24.dp))
-                DownloadProgressCard(
-                    statusText = state.downloadStatusText,
-                    progress = state.downloadProgress,
-                    isDownloading = state.isDownloading,
-                    isComplete = state.downloadComplete,
-                    isAudio = state.isAudio,
-                    onCancel = { showCancelDialog = true },
-                    onPlay = { viewModel.openMediaFile() },
-                    onShare = { viewModel.shareMediaFile() }
-                )
+                // Spacer to clear the FAB so content doesn't get hidden behind it
+                Spacer(modifier = Modifier.height(80.dp))
             }
-
-            // Spacer to clear the FAB so content doesn't get hidden behind it
-            Spacer(modifier = Modifier.height(80.dp))
         }
+
+        // Floating Action Button Layer
+        ExtendedFloatingActionButton(
+            onClick = { openYoutube(context) },
+            containerColor = Color(0xFFFF0000),
+            contentColor = Color.White,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.SmartDisplay,
+                modifier = Modifier.size(34.dp),
+                contentDescription = "Open YouTube"
+            )
+        }
+
+        // Snackbar Layer
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
     }
 
     if (showFormatDialog && state.videoMetadata != null) {
