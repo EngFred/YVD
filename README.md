@@ -6,7 +6,7 @@
 ![Hilt](https://img.shields.io/badge/Hilt-Dependency%20Injection-orange?style=for-the-badge)
 ![WorkManager](https://img.shields.io/badge/WorkManager-Background%20Sync-red?style=for-the-badge&logo=android&logoColor=white)
 
-[![Download APK](https://img.shields.io/github/v/release/EngFred/YVD?style=for-the-badge&label=Download%20APK&color=success&logo=android)](https://github.com/EngFred/YVD/releases/download/v1.2.0/yvd.apk)
+[![Download APK](https://img.shields.io/github/v/release/EngFred/YVD?style=for-the-badge&label=Download%20APK&color=success&logo=android)](https://github.com/EngFred/YVD/releases/download/v1.2.2/yvd_v1.2.2.apk)
 
 **YVD** is a lightweight, high-performance native Android application built with Kotlin and Jetpack Compose. It allows users to download YouTube videos and audio only instantly without the bloat of external binarie and at very fast download speeds.
 YVD uses the NewPipe Extractor engine to parse metadata and OkHttp for raw stream downloading. This results in instant startup times and a significantly smaller APK size.
@@ -14,11 +14,13 @@ YVD uses the NewPipe Extractor engine to parse metadata and OkHttp for raw strea
 ---
 
 ### App Interface
-<img src="https://github.com/user-attachments/assets/14d92a4a-4791-448c-a09e-db1df5cb83ce" width="200">
-<img src="https://github.com/user-attachments/assets/be771b28-d628-4dc2-9505-e71a7019c7d2" width="200">
-<img src="https://github.com/user-attachments/assets/fcfdcb9b-8a40-45b7-aaa8-3e47288b6592" width="200">
-<img src="https://github.com/user-attachments/assets/248bf8b9-6cd7-420a-8e78-3c975748442f" width="200">
-<img src="https://github.com/user-attachments/assets/569bcda9-ce6d-465b-985d-da8c5e277d55" width="200">
+<img src="https://github.com/user-attachments/assets/daacf372-1b8a-411e-bc60-bc5053cd84ef" width="250">
+<img src="https://github.com/user-attachments/assets/14d92a4a-4791-448c-a09e-db1df5cb83ce" width="250">
+<img src="https://github.com/user-attachments/assets/be771b28-d628-4dc2-9505-e71a7019c7d2" width="250">
+<img src="https://github.com/user-attachments/assets/fcfdcb9b-8a40-45b7-aaa8-3e47288b6592" width="250">
+<img src="https://github.com/user-attachments/assets/248bf8b9-6cd7-420a-8e78-3c975748442f" width="250">
+<img src="https://github.com/user-attachments/assets/569bcda9-ce6d-465b-985d-da8c5e277d55" width="250">
+
 ---
 
 ## Tech Stack & Architecture
@@ -81,17 +83,3 @@ The Repository uses callbackFlow to emit a sealed DownloadStatus class. This all
 
 ### 4. Secure File Access
 The app targets Android 10+ (Scoped Storage) but utilizes FileProvider to securely share the downloaded file Uri with external video player apps. It grants temporary read permissions via Intent.FLAG_GRANT_READ_URI_PERMISSION, ensuring the app remains secure while interacting with the Android ecosystem.
-
-## Installation
-Clone the repository
-
-Bash
-
-git clone [https://github.com/EngFred/YVD.git](https://github.com/EngFred/YVD.git)
-Open in Android Studio.
-
-Sync Gradle to download dependencies.
-
-Run on an Emulator or Physical Device.
-
-Disclaimer: This application is for educational purposes only. Downloading copyrighted content from YouTube without permission may violate their Terms of Service. Please use responsibly.
