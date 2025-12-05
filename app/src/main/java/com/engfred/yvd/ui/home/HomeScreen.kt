@@ -1,8 +1,6 @@
 package com.engfred.yvd.ui.home
 
 import android.Manifest
-import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -10,7 +8,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -26,13 +26,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.engfred.yvd.ui.components.ConfirmationDialog
 import com.engfred.yvd.ui.components.DownloadProgressCard
 import com.engfred.yvd.ui.components.FormatSelectionSheet
 import com.engfred.yvd.ui.components.ThemeSelectionDialog
 import com.engfred.yvd.ui.components.VideoCard
-import androidx.core.net.toUri
 import com.engfred.yvd.util.openYoutube
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -128,7 +128,7 @@ fun HomeScreen(
                 // Added padding to clear the Bottom Navigation Bar in MainScreen
                 modifier = Modifier.padding(bottom = 135.dp),
                 onClick = { openYoutube(context) },
-                containerColor = Color(0xFFFF0000), // YouTube Brand Red
+                containerColor = Color(0xFFFF0000),
                 contentColor = Color.White
             ) {
                 // Using SmartDisplay as it resembles a video screen.
@@ -146,6 +146,7 @@ fun HomeScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .consumeWindowInsets(padding)
+                .systemBarsPadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -181,10 +182,8 @@ fun HomeScreen(
             Spacer(modifier = Modifier.height(12.dp))
 
             // Get Info Button
-            AnimatedVisibility(
-                visible = state.videoMetadata == null && !state.isDownloading && !state.downloadComplete,
-                enter = fadeIn(),
-                exit = fadeOut()
+            if (
+                state.videoMetadata == null && !state.isDownloading && !state.downloadComplete
             ) {
                 Button(
                     onClick = {
@@ -201,6 +200,42 @@ fun HomeScreen(
                         Text("Get Video Info", color = Color.White)
                     }
                 }
+            }
+
+
+            if (
+                state.videoMetadata == null && !state.isDownloading && !state.downloadComplete
+            ){
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(400.dp)
+                        .padding(start = 24.dp, end = 24.dp)
+                        .navigationBarsPadding()
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.ContentPaste,
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp),
+                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "How to Download",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "1. Tap the YouTube button to find a video\n2. Copy the video link\n3. Paste it above to start",
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
             }
 
             // Video Metadata Card
