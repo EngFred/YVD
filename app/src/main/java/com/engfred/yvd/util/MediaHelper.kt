@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.media.ThumbnailUtils
 import android.provider.MediaStore
+import android.util.LruCache
 import androidx.core.content.FileProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -14,10 +15,6 @@ import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Shared utility for handling media file actions (Open/Play, Share).
- * Injected into ViewModels to keep UI logic clean and DRY.
- */
 @Singleton
 class MediaHelper @Inject constructor(
     @ApplicationContext private val context: Context
@@ -25,19 +22,15 @@ class MediaHelper @Inject constructor(
 
     fun openMediaFile(file: File) {
         if (!file.exists()) throw Exception("File not found")
-
         try {
             val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
             val extension = file.extension.lowercase()
-            val mimeType = when(extension) {
-                "m4a", "mp3", "wav", "ogg" -> "audio/*"
-                else -> "video/*"
-            }
+            val mimeType = if (extension in listOf("m4a", "mp3", "wav", "ogg")) "audio/*" else "video/*"
 
             val intent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(uri, mimeType)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) // Required when starting from App Context
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
         } catch (e: Exception) {
@@ -47,14 +40,10 @@ class MediaHelper @Inject constructor(
 
     fun shareMediaFile(file: File) {
         if (!file.exists()) throw Exception("File not found")
-
         try {
             val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
             val extension = file.extension.lowercase()
-            val mimeType = when(extension) {
-                "m4a", "mp3", "wav", "ogg" -> "audio/*"
-                else -> "video/*"
-            }
+            val mimeType = if (extension in listOf("m4a", "mp3", "wav", "ogg")) "audio/*" else "video/*"
 
             val shareIntent = Intent(Intent.ACTION_SEND).apply {
                 type = mimeType
@@ -62,7 +51,6 @@ class MediaHelper @Inject constructor(
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-
             val chooser = Intent.createChooser(shareIntent, "Share Media").apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
@@ -73,41 +61,63 @@ class MediaHelper @Inject constructor(
     }
 
     companion object {
+        // Simple cache to store up to 50 thumbnails/artworks in memory
+        private val thumbnailCache = LruCache<String, Any>(50)
+
         /**
          * Extracts album art from an audio file.
-         * Returns ByteArray (which Coil can load directly).
+         * Checks cache first.
          */
         suspend fun getAudioArtwork(file: File): ByteArray? = withContext(Dispatchers.IO) {
+            val key = file.absolutePath
+
+            // 1. Check Cache
+            thumbnailCache.get(key)?.let { return@withContext it as ByteArray }
+
+            // 2. If not in cache, extract it
             val retriever = MediaMetadataRetriever()
-            return@withContext try {
+            try {
                 retriever.setDataSource(file.absolutePath)
-                retriever.embeddedPicture
+                val art = retriever.embeddedPicture
+
+                // 3. Save to cache if found
+                if (art != null) {
+                    thumbnailCache.put(key, art)
+                }
+                return@withContext art
             } catch (e: Exception) {
                 e.printStackTrace()
-                null
+                return@withContext null
             } finally {
-                try {
-                    retriever.release()
-                } catch (e: Exception) {
-                    // Ignore release errors
-                }
+                try { retriever.release() } catch (_: Exception) {}
             }
         }
 
         /**
          * Extracts a thumbnail from a video file.
-         * Returns a Bitmap.
+         * Checks cache first.
          */
         suspend fun getVideoThumbnail(file: File): Bitmap? = withContext(Dispatchers.IO) {
-            return@withContext try {
-                // MINI_KIND corresponds to 512 x 384
-                ThumbnailUtils.createVideoThumbnail(
+            val key = file.absolutePath
+
+            // 1. Check Cache
+            thumbnailCache.get(key)?.let { return@withContext it as Bitmap }
+
+            // 2. If not in cache, generate it
+            try {
+                val bitmap = ThumbnailUtils.createVideoThumbnail(
                     file.absolutePath,
                     MediaStore.Video.Thumbnails.MINI_KIND
                 )
+
+                // 3. Save to cache if found
+                if (bitmap != null) {
+                    thumbnailCache.put(key, bitmap)
+                }
+                return@withContext bitmap
             } catch (e: Exception) {
                 e.printStackTrace()
-                null
+                return@withContext null
             }
         }
     }

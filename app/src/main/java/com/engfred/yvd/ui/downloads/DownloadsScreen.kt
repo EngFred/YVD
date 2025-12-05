@@ -1,5 +1,6 @@
 package com.engfred.yvd.ui.downloads
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -46,7 +47,6 @@ fun DownloadsScreen(
     viewModel: DownloadsViewModel = hiltViewModel()
 ) {
     val downloadItems by viewModel.files.collectAsState()
-
     var itemToDelete by remember { mutableStateOf<DownloadItem?>(null) }
 
     LaunchedEffect(Unit) {
@@ -91,6 +91,9 @@ fun DownloadsScreen(
             LazyColumn(modifier = Modifier.padding(padding)) {
                 items(downloadItems) { item ->
                     ListItem(
+                        modifier = Modifier.clickable {
+                            viewModel.playFile(item)
+                        },
                         headlineContent = {
                             Text(item.fileName, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         },
@@ -109,8 +112,9 @@ fun DownloadsScreen(
                         trailingContent = {
                             Row {
                                 IconButton(onClick = { viewModel.playFile(item) }) {
-                                    Icon(Icons.Rounded.PlayArrow, contentDescription = "Play")
+                                    Icon(Icons.Rounded.PlayArrow, contentDescription = "play", Modifier.size(34.dp))
                                 }
+
                                 IconButton(onClick = { viewModel.shareFile(item) }) {
                                     Icon(Icons.Rounded.Share, contentDescription = "Share")
                                 }
