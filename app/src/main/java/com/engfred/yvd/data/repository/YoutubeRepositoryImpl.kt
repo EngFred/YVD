@@ -48,6 +48,7 @@ import javax.inject.Inject
  * - Uses [NewPipe] extractor for parsing YouTube pages.
  * - Implements **Multi-threaded Chunked Downloading** for high speed.
  * - Handles **Muxing** (merging video + audio streams) for high-quality formats (1080p+).
+ * - **Smart Caching:** Checks if file exists before downloading to save data.
  */
 class YoutubeRepositoryImpl @Inject constructor(
     private val context: Context
@@ -138,9 +139,10 @@ class YoutubeRepositoryImpl @Inject constructor(
 
     /**
      * Orchestrates the download process.
-     * 1. If Audio only: Downloads directly.
-     * 2. If Standard Video (Video+Audio combined): Downloads directly.
-     * 3. If Adaptive Video (Video only): Downloads Video + Audio separately, then Muxes them.
+     * 1. Checks if file already exists. If yes, return Success immediately.
+     * 2. If Audio only: Downloads directly.
+     * 3. If Standard Video (Video+Audio combined): Downloads directly.
+     * 4. If Adaptive Video (Video only): Downloads Video + Audio separately, then Muxes them.
      */
     override fun downloadVideo(
         url: String,
@@ -161,33 +163,50 @@ class YoutubeRepositoryImpl @Inject constructor(
 
             val cleanTitle = title.replace("[^a-zA-Z0-9.-]".toRegex(), "_").take(50)
 
+            // Determine final filename BEFORE downloading to check existence
+            val finalFile: File
+
+            if (isAudio) {
+                val targetStream = extractor.audioStreams.find { it.itag.toString() == formatId }
+                if(targetStream == null) throw Exception("Stream not found")
+                val fileName = "${cleanTitle}.${targetStream.format?.suffix}"
+                finalFile = File(appDir, fileName)
+            } else {
+                val allVideoStreams = extractor.videoStreams + extractor.videoOnlyStreams
+                val targetStream = allVideoStreams.find { it.itag.toString() == formatId }
+                if(targetStream == null) throw Exception("Stream not found")
+                val videoExt = targetStream.format?.suffix ?: "mp4"
+                val fileName = "${cleanTitle}_${targetStream.resolution}.$videoExt"
+                finalFile = File(appDir, fileName)
+            }
+
+            // If file exists and has content, skip download!
+            if (finalFile.exists() && finalFile.length() > 0) {
+                Log.d(TAG, "File already exists: ${finalFile.absolutePath}. Skipping download.")
+                trySend(DownloadStatus.Progress(100f, "File already downloaded"))
+                trySend(DownloadStatus.Success(finalFile))
+                close()
+                return@callbackFlow
+            }
+
             if (isAudio) {
                 // --- AUDIO DOWNLOAD STRATEGY ---
-                val targetStream = extractor.audioStreams.find { it.itag.toString() == formatId }
-                    ?: throw Exception("Audio stream not found")
-
-                val fileName = "${cleanTitle}.${targetStream.format?.suffix}"
-                val outputFile = File(appDir, fileName)
-
-                Log.d(TAG, "Downloading Audio Stream to ${outputFile.name}")
-                downloadStreamParallel(targetStream, outputFile, this@callbackFlow, "Downloading Audio...")
-                trySend(DownloadStatus.Success(outputFile))
+                val targetStream = extractor.audioStreams.find { it.itag.toString() == formatId }!!
+                Log.d(TAG, "Downloading Audio Stream to ${finalFile.name}")
+                downloadStreamParallel(targetStream, finalFile, this@callbackFlow, "Downloading Audio...")
+                trySend(DownloadStatus.Success(finalFile))
 
             } else {
                 // --- VIDEO DOWNLOAD STRATEGY ---
                 val allVideoStreams = extractor.videoStreams + extractor.videoOnlyStreams
-                val targetStream = allVideoStreams.find { it.itag.toString() == formatId }
-                    ?: throw Exception("Video stream not found")
-
+                val targetStream = allVideoStreams.find { it.itag.toString() == formatId }!!
                 val videoExt = targetStream.format?.suffix ?: "mp4"
-                val fileName = "${cleanTitle}_${targetStream.resolution}.$videoExt"
-                val outputFile = File(appDir, fileName)
 
                 if (!targetStream.isVideoOnly) {
                     // Case A: Pre-merged file exists (usually 360p)
-                    Log.d(TAG, "Downloading Standard Video to ${outputFile.name}")
-                    downloadStreamParallel(targetStream, outputFile, this@callbackFlow, "Downloading Video...")
-                    trySend(DownloadStatus.Success(outputFile))
+                    Log.d(TAG, "Downloading Standard Video to ${finalFile.name}")
+                    downloadStreamParallel(targetStream, finalFile, this@callbackFlow, "Downloading Video...")
+                    trySend(DownloadStatus.Success(finalFile))
                 } else {
                     // Case B: High Quality (1080p+) requires downloading separate tracks and merging
                     Log.d(TAG, "Downloading Video-Only Stream (Muxing required)")
@@ -212,10 +231,10 @@ class YoutubeRepositoryImpl @Inject constructor(
                             Log.d(TAG, "Starting Muxing process")
 
                             val muxerFormat = if (videoExt == "mp4") MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4 else MediaMuxer.OutputFormat.MUXER_OUTPUT_WEBM
-                            muxAudioVideo(audioTemp.absolutePath, videoTemp.absolutePath, outputFile.absolutePath, muxerFormat)
+                            muxAudioVideo(audioTemp.absolutePath, videoTemp.absolutePath, finalFile.absolutePath, muxerFormat)
 
                             Log.d(TAG, "Muxing complete")
-                            trySend(DownloadStatus.Success(outputFile))
+                            trySend(DownloadStatus.Success(finalFile))
                         } finally {
                             audioTemp.delete() // Clean up audio temp
                         }
@@ -324,6 +343,8 @@ class YoutubeRepositoryImpl @Inject constructor(
             Log.d(TAG, "Parallel download complete for ${file.name}")
         } catch (e: Exception) {
             Log.e(TAG, "Parallel download failed: ${e.message}")
+            // Delete incomplete file if it wasn't already there
+            if(file.exists() && file.length() != totalLength) file.delete()
             throw e
         }
     }
@@ -360,14 +381,13 @@ class YoutubeRepositoryImpl @Inject constructor(
         flow: ProducerScope<DownloadStatus>,
         statusPrefix: String
     ) {
-        // "Range" header tells the server we only want these specific bytes
         val request = Request.Builder()
             .url(url)
             .header("Range", "bytes=$start-$end")
             .build()
 
         val raf = RandomAccessFile(file, "rw")
-        raf.seek(start) // Jump to the correct position in the file
+        raf.seek(start)
 
         try {
             val response = downloadClient.newCall(request).execute()
@@ -375,7 +395,7 @@ class YoutubeRepositoryImpl @Inject constructor(
 
             val body = response.body ?: throw IOException("Empty body")
             val inputStream = body.byteStream()
-            val buffer = ByteArray(64 * 1024) // 64KB buffer for optimal I/O
+            val buffer = ByteArray(64 * 1024)
             var bytesRead: Int
 
             while (inputStream.read(buffer).also { bytesRead = it } != -1) {

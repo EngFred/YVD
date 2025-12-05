@@ -14,10 +14,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Audiotrack
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentPaste
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -180,11 +182,32 @@ fun HomeScreen(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = state.downloadStatusText,
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = state.downloadStatusText,
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            // Cancel Button visible only during download
+                            if (state.isDownloading && !state.downloadComplete) {
+                                IconButton(
+                                    onClick = { viewModel.cancelDownload() },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.Close,
+                                        contentDescription = "Cancel",
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
+                        }
+
                         Spacer(modifier = Modifier.height(8.dp))
 
                         if (state.isDownloading && state.downloadProgress == 0f) {
@@ -200,18 +223,32 @@ fun HomeScreen(
                             )
                         }
 
+                        // Play and Share Buttons
                         AnimatedVisibility(visible = state.downloadComplete) {
-                            Button(
-                                onClick = { viewModel.openMediaFile(context) },
+                            Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(top = 16.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Icon(Icons.Rounded.PlayArrow, contentDescription = null)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                // FIX: state.isAudio is now valid
-                                Text(if (state.isAudio) "Play Audio" else "Play Video")
+                                Button(
+                                    onClick = { viewModel.openMediaFile(context) },
+                                    modifier = Modifier.weight(1f),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50))
+                                ) {
+                                    Icon(Icons.Rounded.PlayArrow, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(if (state.isAudio) "Play" else "Play")
+                                }
+
+                                OutlinedButton(
+                                    onClick = { viewModel.shareMediaFile(context) },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Icons.Rounded.Share, contentDescription = null)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Share")
+                                }
                             }
                         }
                     }
@@ -254,7 +291,6 @@ fun HomeScreen(
                     LazyColumn(
                         contentPadding = PaddingValues(bottom = 32.dp)
                     ) {
-                        // FIX: Changed from items(metadata.formats) to items(metadata.videoFormats)
                         items(metadata.videoFormats) { format ->
                             ListItem(
                                 headlineContent = { Text(format.resolution) },
@@ -274,7 +310,6 @@ fun HomeScreen(
                                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                                         permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                                     }
-                                    // FIX: Added urlText parameter
                                     viewModel.downloadMedia(urlText, format.formatId, isAudio = false)
                                 }
                             )
@@ -288,7 +323,6 @@ fun HomeScreen(
                     ) {
                         items(metadata.audioFormats) { format ->
                             ListItem(
-                                // FIX: Changed format.quality to format.bitrate
                                 headlineContent = { Text(format.bitrate) },
                                 supportingContent = { Text("${format.ext.uppercase()} • ${format.fileSize}") },
                                 leadingContent = {
@@ -306,7 +340,6 @@ fun HomeScreen(
                                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                                         permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                                     }
-                                    // FIX: Added urlText parameter
                                     viewModel.downloadMedia(urlText, format.formatId, isAudio = true)
                                 }
                             )

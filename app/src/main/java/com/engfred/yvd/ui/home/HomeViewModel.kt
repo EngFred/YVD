@@ -43,6 +43,9 @@ class HomeViewModel @Inject constructor(
     val state = _state.asStateFlow()
     private val workManager = WorkManager.getInstance(context)
 
+    // Track current worker ID to enable cancellation
+    private var currentWorkId: UUID? = null
+
     fun onUrlChanged() {
         _state.value = _state.value.copy(
             videoMetadata = null,
@@ -101,12 +104,24 @@ class HomeViewModel @Inject constructor(
             .addTag("download_job")
             .build()
 
+        // Save ID for cancellation
+        currentWorkId = downloadRequest.id
+
         workManager.enqueue(downloadRequest)
         observeWork(downloadRequest.id)
     }
 
+    fun cancelDownload() {
+        currentWorkId?.let { id ->
+            workManager.cancelWorkById(id)
+            _state.value = _state.value.copy(
+                isDownloading = false,
+                downloadStatusText = "Cancelled"
+            )
+        }
+    }
+
     private fun observeWork(id: UUID) {
-        // Observe LiveData and update StateFlow
         workManager.getWorkInfoByIdLiveData(id).observeForever { workInfo ->
             if (workInfo == null) return@observeForever
 
@@ -118,7 +133,6 @@ class HomeViewModel @Inject constructor(
                     )
                 }
                 WorkInfo.State.RUNNING -> {
-                    // FIX: This now matches the keys set in the Worker
                     val progress = workInfo.progress.getFloat("progress", 0f)
                     val status = workInfo.progress.getString("status") ?: "Downloading..."
 
@@ -148,7 +162,13 @@ class HomeViewModel @Inject constructor(
                         downloadStatusText = ""
                     )
                 }
-                else -> {} // CANCELLED or BLOCKED
+                WorkInfo.State.CANCELLED -> {
+                    _state.value = _state.value.copy(
+                        isDownloading = false,
+                        downloadStatusText = "Download Cancelled"
+                    )
+                }
+                else -> {}
             }
         }
     }
@@ -163,7 +183,6 @@ class HomeViewModel @Inject constructor(
         try {
             val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
             val extension = file.extension.lowercase()
-
             val mimeType = when(extension) {
                 "m4a", "mp3", "wav", "ogg" -> "audio/*"
                 else -> "video/*"
@@ -177,6 +196,30 @@ class HomeViewModel @Inject constructor(
             context.startActivity(intent)
         } catch (e: Exception) {
             _state.value = _state.value.copy(error = "Could not open file: ${e.message}")
+        }
+    }
+
+    fun shareMediaFile(context: Context) {
+        val file = _state.value.downloadedFile ?: return
+        if (!file.exists()) return
+
+        try {
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+            val extension = file.extension.lowercase()
+            val mimeType = when(extension) {
+                "m4a", "mp3", "wav", "ogg" -> "audio/*"
+                else -> "video/*"
+            }
+
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = mimeType
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+
+            context.startActivity(Intent.createChooser(shareIntent, "Share Media"))
+        } catch (e: Exception) {
+            _state.value = _state.value.copy(error = "Could not share file: ${e.message}")
         }
     }
 }
