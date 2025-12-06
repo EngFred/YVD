@@ -49,6 +49,7 @@ import javax.inject.Inject
  * - Implements **Multi-threaded Chunked Downloading** for high speed.
  * - Handles **Muxing** (merging video + audio streams) for high-quality formats (1080p+).
  * - **Smart Caching:** Checks if file exists before downloading to save data.
+ * - **Smart Naming:** Distinguishes between different resolutions and bitrates.
  */
 class YoutubeRepositoryImpl @Inject constructor(
     private val context: Context
@@ -169,13 +170,16 @@ class YoutubeRepositoryImpl @Inject constructor(
             if (isAudio) {
                 val targetStream = extractor.audioStreams.find { it.itag.toString() == formatId }
                 if(targetStream == null) throw Exception("Stream not found")
-                val fileName = "${cleanTitle}.${targetStream.format?.suffix}"
+
+                val bitrate = targetStream.averageBitrate
+                val fileName = "${cleanTitle}_${bitrate}kbps.${targetStream.format?.suffix}"
                 finalFile = File(appDir, fileName)
             } else {
                 val allVideoStreams = extractor.videoStreams + extractor.videoOnlyStreams
                 val targetStream = allVideoStreams.find { it.itag.toString() == formatId }
                 if(targetStream == null) throw Exception("Stream not found")
                 val videoExt = targetStream.format?.suffix ?: "mp4"
+
                 val fileName = "${cleanTitle}_${targetStream.resolution}.$videoExt"
                 finalFile = File(appDir, fileName)
             }
