@@ -11,28 +11,17 @@ import com.engfred.yvd.domain.repository.YoutubeRepository
 import com.engfred.yvd.util.MediaHelper
 import com.engfred.yvd.worker.DownloadWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.UUID
 import javax.inject.Inject
 
 data class HomeState(
-    // Input State
     val urlInput: String = "",
-
-    // Dialog Visibility States
     val isFormatDialogVisible: Boolean = false,
     val isCancelDialogVisible: Boolean = false,
     val isThemeDialogVisible: Boolean = false,
-
-    // Data / Process States
     val isLoading: Boolean = false,
     val error: String? = null,
     val videoMetadata: VideoMetadata? = null,
@@ -61,7 +50,6 @@ class HomeViewModel @Inject constructor(
         initialValue = AppTheme.SYSTEM
     )
 
-    // Track current worker ID to enable cancellation
     private var currentWorkId: UUID? = null
 
     // --- UI Interactions ---
@@ -70,7 +58,6 @@ class HomeViewModel @Inject constructor(
         _state.update {
             it.copy(
                 urlInput = newUrl,
-                // Reset metadata when URL changes significantly
                 videoMetadata = if (newUrl.isBlank()) null else it.videoMetadata,
                 downloadComplete = false,
                 downloadedFile = null,
@@ -87,9 +74,7 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    fun hideFormatDialog() {
-        _state.update { it.copy(isFormatDialogVisible = false) }
-    }
+    fun hideFormatDialog() { _state.update { it.copy(isFormatDialogVisible = false) } }
 
     fun showCancelDialog() {
         if (_state.value.isDownloading) {
@@ -97,17 +82,11 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    fun hideCancelDialog() {
-        _state.update { it.copy(isCancelDialogVisible = false) }
-    }
+    fun hideCancelDialog() { _state.update { it.copy(isCancelDialogVisible = false) } }
 
-    fun showThemeDialog() {
-        _state.update { it.copy(isThemeDialogVisible = true) }
-    }
+    fun showThemeDialog() { _state.update { it.copy(isThemeDialogVisible = true) } }
 
-    fun hideThemeDialog() {
-        _state.update { it.copy(isThemeDialogVisible = false) }
-    }
+    fun hideThemeDialog() { _state.update { it.copy(isThemeDialogVisible = false) } }
 
     fun updateTheme(newTheme: AppTheme) {
         viewModelScope.launch {
@@ -116,19 +95,13 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    fun clearError() {
-        _state.update { it.copy(error = null) }
-    }
+    fun clearError() { _state.update { it.copy(error = null) } }
 
     // --- Data Loading ---
 
     fun loadVideoInfo(url: String) {
         if (url.isBlank()) return
-
-        // Sync input if loaded via paste button
-        if (url != _state.value.urlInput) {
-            onUrlInputChanged(url)
-        }
+        if (url != _state.value.urlInput) onUrlInputChanged(url)
 
         _state.update { it.copy(isLoading = true, error = null, videoMetadata = null) }
 
@@ -150,7 +123,6 @@ class HomeViewModel @Inject constructor(
         val url = currentState.urlInput
         val title = currentState.videoMetadata?.title ?: "video"
 
-        // Reset state for new download
         _state.update {
             it.copy(
                 isDownloading = true,
@@ -159,7 +131,7 @@ class HomeViewModel @Inject constructor(
                 downloadComplete = false,
                 error = null,
                 isAudio = isAudio,
-                isFormatDialogVisible = false // Ensure dialog is closed
+                isFormatDialogVisible = false
             )
         }
 
@@ -177,10 +149,9 @@ class HomeViewModel @Inject constructor(
         val downloadRequest = OneTimeWorkRequestBuilder<DownloadWorker>()
             .setConstraints(constraints)
             .setInputData(inputData)
-            .addTag("download_job")
+            .addTag("download_job") // Tag is crucial for finding it later
             .build()
 
-        // Save ID for cancellation
         currentWorkId = downloadRequest.id
 
         workManager.enqueue(downloadRequest)
@@ -201,73 +172,58 @@ class HomeViewModel @Inject constructor(
     }
 
     private fun observeWork(id: UUID) {
-        // Note: In a production app, consider using workManager.getWorkInfoByIdFlow
-        // to avoid potential leaks with observeForever, or wrap in a suspend function.
-        // Keeping as-is per existing logic pattern.
-        workManager.getWorkInfoByIdLiveData(id).observeForever { workInfo ->
-            if (workInfo == null) return@observeForever
+        viewModelScope.launch {
+            workManager.getWorkInfoByIdFlow(id).collect { workInfo ->
+                if (workInfo == null) return@collect
 
-            when (workInfo.state) {
-                WorkInfo.State.ENQUEUED -> {
-                    _state.update {
-                        it.copy(isDownloading = true, downloadStatusText = "Pending...")
+                when (workInfo.state) {
+                    WorkInfo.State.ENQUEUED -> {
+                        _state.update { it.copy(isDownloading = true, downloadStatusText = "Pending...") }
                     }
-                }
-                WorkInfo.State.RUNNING -> {
-                    val progress = workInfo.progress.getFloat("progress", 0f)
-                    val status = workInfo.progress.getString("status") ?: "Downloading..."
-
-                    _state.update {
-                        it.copy(isDownloading = true, downloadProgress = progress, downloadStatusText = status)
+                    WorkInfo.State.RUNNING -> {
+                        val progress = workInfo.progress.getFloat("progress", 0f)
+                        val status = workInfo.progress.getString("status") ?: "Downloading..."
+                        _state.update {
+                            it.copy(isDownloading = true, downloadProgress = progress, downloadStatusText = status)
+                        }
                     }
-                }
-                WorkInfo.State.SUCCEEDED -> {
-                    val path = workInfo.outputData.getString("filePath")
-                    val file = if (path != null) File(path) else null
-
-                    _state.update {
-                        it.copy(
-                            isDownloading = false,
-                            downloadComplete = true,
-                            downloadProgress = 100f,
-                            downloadedFile = file,
-                            downloadStatusText = "Download Complete"
-                        )
+                    WorkInfo.State.SUCCEEDED -> {
+                        val path = workInfo.outputData.getString("filePath")
+                        val file = if (path != null) File(path) else null
+                        _state.update {
+                            it.copy(
+                                isDownloading = false,
+                                downloadComplete = true,
+                                downloadProgress = 100f,
+                                downloadedFile = file,
+                                downloadStatusText = "Download Complete"
+                            )
+                        }
                     }
-                }
-                WorkInfo.State.FAILED -> {
-                    val errorMsg = workInfo.outputData.getString("error") ?: "Download Failed"
-                    _state.update {
-                        it.copy(isDownloading = false, error = errorMsg, downloadStatusText = "")
+                    WorkInfo.State.FAILED -> {
+                        val errorMsg = workInfo.outputData.getString("error") ?: "Download Failed"
+                        _state.update {
+                            it.copy(isDownloading = false, error = errorMsg, downloadStatusText = "")
+                        }
                     }
-                }
-                WorkInfo.State.CANCELLED -> {
-                    _state.update {
-                        it.copy(isDownloading = false, downloadStatusText = "Download Cancelled")
+                    WorkInfo.State.CANCELLED -> {
+                        _state.update {
+                            it.copy(isDownloading = false, downloadStatusText = "Download Cancelled")
+                        }
                     }
+                    else -> {}
                 }
-                else -> {}
             }
         }
     }
 
-    // --- Media Actions ---
-
     fun openMediaFile() {
         val file = _state.value.downloadedFile ?: return
-        try {
-            mediaHelper.openMediaFile(file)
-        } catch (e: Exception) {
-            _state.update { it.copy(error = e.message) }
-        }
+        try { mediaHelper.openMediaFile(file) } catch (e: Exception) { _state.update { it.copy(error = e.message) } }
     }
 
     fun shareMediaFile() {
         val file = _state.value.downloadedFile ?: return
-        try {
-            mediaHelper.shareMediaFile(file)
-        } catch (e: Exception) {
-            _state.update { it.copy(error = e.message) }
-        }
+        try { mediaHelper.shareMediaFile(file) } catch (e: Exception) { _state.update { it.copy(error = e.message) } }
     }
 }
