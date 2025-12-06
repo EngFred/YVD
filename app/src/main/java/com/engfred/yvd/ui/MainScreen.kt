@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.DownloadForOffline
@@ -35,7 +36,7 @@ fun MainScreen() {
         NavHost(
             navController = navController,
             startDestination = "home",
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.background(MaterialTheme.colorScheme.background).weight(1f)
         ) {
             composable(
                 route = "home",

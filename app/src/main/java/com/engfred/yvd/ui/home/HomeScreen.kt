@@ -15,7 +15,6 @@ import androidx.compose.material.icons.rounded.SettingsBrightness
 import androidx.compose.material.icons.rounded.SmartDisplay
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -24,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.engfred.yvd.ui.components.ConfirmationDialog
 import com.engfred.yvd.ui.components.DownloadProgressCard
 import com.engfred.yvd.ui.components.FormatSelectionSheet
@@ -34,7 +34,7 @@ import com.engfred.yvd.util.openYoutube
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    viewModel: HomeViewModel = androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel()
+    viewModel: HomeViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
     val currentTheme by viewModel.currentTheme.collectAsState()
@@ -43,12 +43,6 @@ fun HomeScreen(
     val clipboardManager = LocalClipboardManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val snackbarHostState = remember { SnackbarHostState() }
-
-    var urlText by rememberSaveable { mutableStateOf("") }
-
-    var showFormatDialog by rememberSaveable { mutableStateOf(false) }
-    var showCancelDialog by rememberSaveable { mutableStateOf(false) }
-    var showThemeDialog by rememberSaveable { mutableStateOf(false) }
 
     // Permission Launcher
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -72,32 +66,27 @@ fun HomeScreen(
         }
     }
 
-    if (showCancelDialog) {
+    // --- Dialogs Controlled by ViewModel State ---
+
+    if (state.isCancelDialogVisible) {
         ConfirmationDialog(
             title = "Cancel Download?",
             text = "Are you sure you want to stop the current download?",
             confirmText = "Yes, Cancel",
-            onConfirm = {
-                viewModel.cancelDownload()
-                showCancelDialog = false
-            },
-            onDismiss = { showCancelDialog = false }
+            onConfirm = { viewModel.cancelDownload() },
+            onDismiss = { viewModel.hideCancelDialog() }
         )
     }
 
-    // Theme Dialog
-    if (showThemeDialog) {
+    if (state.isThemeDialogVisible) {
         ThemeSelectionDialog(
             currentTheme = currentTheme,
-            onThemeSelected = { theme ->
-                viewModel.updateTheme(theme)
-                showThemeDialog = false
-            },
-            onDismiss = { showThemeDialog = false }
+            onThemeSelected = { theme -> viewModel.updateTheme(theme) },
+            onDismiss = { viewModel.hideThemeDialog() }
         )
     }
 
-    // Root Container replacing Scaffold
+    // Root Container
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -115,11 +104,11 @@ fun HomeScreen(
                     actionIconContentColor = Color.White
                 ),
                 actions = {
-                    IconButton(onClick = { showThemeDialog = true }) {
+                    IconButton(onClick = { viewModel.showThemeDialog() }) {
                         Icon(
                             imageVector = Icons.Rounded.SettingsBrightness,
                             contentDescription = "Change Theme",
-                            modifier = Modifier.size(64.dp)
+                            modifier = Modifier.size(28.dp) // Adjusted size for better standard fit
                         )
                     }
                 }
@@ -138,11 +127,8 @@ fun HomeScreen(
 
                 // URL Input Field
                 OutlinedTextField(
-                    value = urlText,
-                    onValueChange = {
-                        urlText = it
-                        viewModel.onUrlChanged()
-                    },
+                    value = state.urlInput,
+                    onValueChange = { viewModel.onUrlInputChanged(it) },
                     label = { Text("Paste YouTube Link") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
@@ -151,7 +137,6 @@ fun HomeScreen(
                             if (clipboardManager.hasText()) {
                                 clipboardManager.getText()?.let { clipData ->
                                     val pastedText = clipData.text.toString()
-                                    urlText = pastedText
                                     keyboardController?.hide()
                                     viewModel.loadVideoInfo(pastedText)
                                 }
@@ -169,7 +154,7 @@ fun HomeScreen(
                     Button(
                         onClick = {
                             keyboardController?.hide()
-                            viewModel.loadVideoInfo(urlText)
+                            viewModel.loadVideoInfo(state.urlInput)
                         },
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(contentColor = Color.White),
@@ -230,7 +215,7 @@ fun HomeScreen(
                     VideoCard(
                         metadata = metadata,
                         isDownloading = state.isDownloading,
-                        onDownloadClick = { showFormatDialog = true }
+                        onDownloadClick = { viewModel.showFormatDialog() }
                     )
                 }
 
@@ -243,7 +228,7 @@ fun HomeScreen(
                         isDownloading = state.isDownloading,
                         isComplete = state.downloadComplete,
                         isAudio = state.isAudio,
-                        onCancel = { showCancelDialog = true },
+                        onCancel = { viewModel.showCancelDialog() },
                         onPlay = { viewModel.openMediaFile() },
                         onShare = { viewModel.shareMediaFile() }
                     )
@@ -277,17 +262,17 @@ fun HomeScreen(
         )
     }
 
-    if (showFormatDialog && state.videoMetadata != null) {
+    // Format Dialog (Sheet)
+    if (state.isFormatDialogVisible && state.videoMetadata != null) {
         FormatSelectionSheet(
             metadata = state.videoMetadata!!,
-            onDismiss = { showFormatDialog = false },
+            onDismiss = { viewModel.hideFormatDialog() },
             onFormatSelected = { formatId, isAudio ->
-                showFormatDialog = false
-                // Permission Check happens here before downloading
+                // Permission Check trigger
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                 }
-                viewModel.downloadMedia(urlText, formatId, isAudio)
+                viewModel.downloadMedia(formatId, isAudio)
             }
         )
     }

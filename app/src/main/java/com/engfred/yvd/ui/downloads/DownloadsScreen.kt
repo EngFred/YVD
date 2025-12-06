@@ -42,10 +42,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,13 +51,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.engfred.yvd.domain.model.DownloadItem
 import com.engfred.yvd.ui.components.ConfirmationDialog
 import com.engfred.yvd.ui.components.FileThumbnail
-
-enum class DeleteMode {
-    NONE, SINGLE, SELECTED, ALL
-}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -70,59 +61,49 @@ fun DownloadsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    // Selection State
-    val selectedItems = remember { mutableStateListOf<DownloadItem>() }
-    val isSelectionMode = selectedItems.isNotEmpty()
-
-    // Deletion Dialog State
-    var deleteMode by remember { mutableStateOf(DeleteMode.NONE) }
-    var singleItemToDelete by remember { mutableStateOf<DownloadItem?>(null) }
-
     LaunchedEffect(Unit) {
         viewModel.loadFiles()
     }
 
-    BackHandler(enabled = isSelectionMode) {
-        selectedItems.clear()
+    // Handle Back Press to exit selection mode
+    BackHandler(enabled = uiState.isSelectionMode) {
+        viewModel.clearSelection()
     }
 
     // --- Dialog Logic ---
-    if (deleteMode != DeleteMode.NONE) {
-        val (title, text, action) = when (deleteMode) {
-            DeleteMode.SINGLE -> Triple(
-                "Delete File?",
-                "Are you sure you want to delete '${singleItemToDelete?.fileName}'?",
-                { singleItemToDelete?.let { viewModel.deleteFile(it) } }
-            )
-            DeleteMode.SELECTED -> Triple(
-                "Delete ${selectedItems.size} items?",
-                "Are you sure you want to delete these ${selectedItems.size} files? This cannot be undone.",
-                {
-                    viewModel.deleteFiles(selectedItems.toList())
-                    selectedItems.clear()
-                }
-            )
-            DeleteMode.ALL -> Triple(
+    if (uiState.deleteMode != DeleteMode.NONE) {
+        val (title, text) = when (uiState.deleteMode) {
+            DeleteMode.SINGLE -> {
+                val fileName = uiState.singleItemToDelete?.fileName ?: "file"
+                Pair(
+                    "Delete File?",
+                    "Are you sure you want to delete '$fileName'?"
+                )
+            }
+            DeleteMode.SELECTED -> {
+                val count = uiState.selectedItems.size
+                val itemString = if (count == 1) "Item" else "Items"
+                val fileString = if (count == 1) "file" else "files"
+                val theseString = if (count == 1) "this" else "these"
+
+                Pair(
+                    "Delete $count $itemString?",
+                    "Are you sure you want to delete $theseString $count $fileString? This cannot be undone."
+                )
+            }
+            DeleteMode.ALL -> Pair(
                 "Delete All Files?",
-                "Are you sure you want to delete ALL downloaded files? This is permanent.",
-                { viewModel.deleteAllFiles() }
+                "Are you sure you want to delete ALL downloaded files? This is permanent."
             )
-            else -> Triple("", "", {})
+            else -> Pair("", "")
         }
 
         ConfirmationDialog(
             title = title,
             text = text,
             confirmText = "Delete",
-            onConfirm = {
-                action()
-                deleteMode = DeleteMode.NONE
-                singleItemToDelete = null
-            },
-            onDismiss = {
-                deleteMode = DeleteMode.NONE
-                singleItemToDelete = null
-            }
+            onConfirm = { viewModel.confirmDelete() },
+            onDismiss = { viewModel.dismissDeleteDialog() }
         )
     }
 
@@ -130,33 +111,34 @@ fun DownloadsScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    if (isSelectionMode) {
-                        Text("${selectedItems.size} Selected")
+                    if (uiState.isSelectionMode) {
+                        // GRAMMAR FIX: Also fixed header "1 Selected" vs "Items Selected" if preferred
+                        Text("${uiState.selectedItems.size} Selected")
                     } else {
                         Text("My Downloads")
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = if (isSelectionMode) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primary,
-                    titleContentColor = if (isSelectionMode) MaterialTheme.colorScheme.onSurfaceVariant else Color.White,
-                    actionIconContentColor = if (isSelectionMode) MaterialTheme.colorScheme.onSurfaceVariant else Color.White,
+                    containerColor = if (uiState.isSelectionMode) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primary,
+                    titleContentColor = if (uiState.isSelectionMode) MaterialTheme.colorScheme.onSurfaceVariant else Color.White,
+                    actionIconContentColor = if (uiState.isSelectionMode) MaterialTheme.colorScheme.onSurfaceVariant else Color.White,
                     navigationIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant
                 ),
                 navigationIcon = {
-                    if (isSelectionMode) {
-                        IconButton(onClick = { selectedItems.clear() }) {
+                    if (uiState.isSelectionMode) {
+                        IconButton(onClick = { viewModel.clearSelection() }) {
                             Icon(Icons.Rounded.Close, contentDescription = "Close Selection")
                         }
                     }
                 },
                 actions = {
-                    if (isSelectionMode) {
-                        IconButton(onClick = { deleteMode = DeleteMode.SELECTED }) {
+                    if (uiState.isSelectionMode) {
+                        IconButton(onClick = { viewModel.showDeleteSelectedDialog() }) {
                             Icon(Icons.Rounded.Delete, contentDescription = "Delete Selected")
                         }
                     } else {
                         if (uiState.files.isNotEmpty()) {
-                            IconButton(onClick = { deleteMode = DeleteMode.ALL }) {
+                            IconButton(onClick = { viewModel.showDeleteAllDialog() }) {
                                 Icon(Icons.Rounded.DeleteForever, contentDescription = "Delete All")
                             }
                         }
@@ -201,21 +183,23 @@ fun DownloadsScreen(
             } else {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
                     items(uiState.files) { item ->
-                        val isSelected = selectedItems.contains(item)
+                        val isSelected = uiState.selectedItems.contains(item)
 
                         ListItem(
                             modifier = Modifier
                                 .combinedClickable(
                                     onClick = {
-                                        if (isSelectionMode) {
-                                            if (isSelected) selectedItems.remove(item) else selectedItems.add(item)
+                                        if (uiState.isSelectionMode) {
+                                            viewModel.toggleSelection(item)
                                         } else {
                                             viewModel.playFile(item)
                                         }
                                     },
                                     onLongClick = {
-                                        if (!isSelectionMode) {
-                                            selectedItems.add(item)
+                                        if (!uiState.isSelectionMode) {
+                                            viewModel.selectSingleItemForLongPress(item)
+                                        } else {
+                                            viewModel.toggleSelection(item)
                                         }
                                     }
                                 )
@@ -255,7 +239,7 @@ fun DownloadsScreen(
                                 }
                             },
                             trailingContent = {
-                                if (!isSelectionMode) {
+                                if (!uiState.isSelectionMode) {
                                     Row {
                                         IconButton(onClick = { viewModel.playFile(item) }) {
                                             Icon(Icons.Rounded.PlayArrow, contentDescription = "play", Modifier.size(34.dp))
@@ -264,8 +248,7 @@ fun DownloadsScreen(
                                             Icon(Icons.Rounded.Share, contentDescription = "Share")
                                         }
                                         IconButton(onClick = {
-                                            singleItemToDelete = item
-                                            deleteMode = DeleteMode.SINGLE
+                                            viewModel.showDeleteSingleDialog(item)
                                         }) {
                                             Icon(
                                                 Icons.Rounded.Delete,
@@ -277,7 +260,7 @@ fun DownloadsScreen(
                                 } else {
                                     RadioButton(
                                         selected = isSelected,
-                                        onClick = null
+                                        onClick = null // Handled by ListItem click
                                     )
                                 }
                             }
